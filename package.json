@@ -1,0 +1,7 @@
+{
+  "name": "online-banking-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
