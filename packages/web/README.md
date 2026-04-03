@@ -1,53 +1,120 @@
-# React + TypeScript + Vite
+# Nexus Banking App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, responsive online banking application built with React, TypeScript, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Dashboard Overview**: Account balances, recent transactions, and quick actions
+- **Account Management**: View and manage multiple accounts
+- **Currency Conversion**: Swap between different currencies
+- **Loan Management**: Apply for and manage loans
+- **Transaction History**: Complete transaction history and filtering
+- **Card Management**: Virtual and physical card management
+- **Beneficiaries**: Manage saved payment recipients
+- **Reports**: Financial reports and analytics
+- **Settings**: Account preferences and security settings
+- **Dark/Light Mode**: Theme switching with system preference detection
+- **Responsive Design**: Mobile-first design that works on all devices
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: React 19 with TypeScript
+- **Routing**: React Router v7
+- **Styling**: Tailwind CSS with custom design system
+- **Icons**: Lucide React
+- **Animations**: Framer Motion
+- **State Management**: Zustand
+- **Build Tool**: Vite
+- **UI Components**: Radix UI primitives
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js 18+
+- npm or yarn
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Clone the repository
+2. Navigate to the web package:
+   ```bash
+   cd packages/web
+   ```
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Build for Production
+
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Preview Production Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
+```bash
+npm run preview
+```
+
+## Project Structure
+
+```
+packages/web/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── layout/         # Layout components (Sidebar, Navbar, etc.)
+│   │   └── dashboard/      # Dashboard-specific components
+│   ├── pages/              # Page components
+│   ├── context/            # React context providers
+│   ├── lib/                # Utilities and helpers
+│   ├── store/              # State management (Zustand)
+│   └── assets/             # Static assets
+├── public/                 # Public assets
+└── dist/                   # Build output (generated)
+```
+
+## Deployment
+
+This app is configured for deployment on Vercel. The `vercel.json` in the root configures the build process for the monorepo structure.
+
+### Deploy to Vercel
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Vercel will automatically detect the configuration and deploy
+
+## Development
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+
+### Code Style
+
+- Uses ESLint for code linting
+- TypeScript for type safety
+- Prettier for code formatting (via ESLint)
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
+
+## License
+
+This project is private and proprietary.
 import reactDom from 'eslint-plugin-react-dom'
 
 export default defineConfig([
