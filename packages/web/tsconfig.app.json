@@ -9,7 +9,7 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
     "paths": {
-      "@online-banking/types": ["../../packages/types/dist/index.d.ts"]
+      "@online-banking/types": ["../../packages/types/src/index.ts"]
     },
 
     /* Bundler mode */
