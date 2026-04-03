@@ -1,0 +1,7 @@
+{
+  "name": "@online-banking/types",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.d.ts",
+  "types": "dist/index.d.ts"
+}
