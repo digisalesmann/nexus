@@ -1,3 +1,3 @@
-import LoansPage from '../pages/LoansPage';
+import LoansPage from '../LoansPage';
 
 export default LoansPage;
