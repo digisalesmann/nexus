@@ -6,13 +6,10 @@ import {
   ChevronRight,
   ArrowUpRight,
   Star,
-  MoreHorizontal,
   CheckCircle2,
   Copy,
   Trash2,
   Edit3,
-  Send,
-  Clock,
   Globe,
   Building2,
   User,
@@ -239,12 +236,11 @@ const BeneficiaryCard = ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BeneficiaryRow = ({
-  b, onSelect, onSend, onToggleFav,
+  b, onSelect, onSend,
 }: {
   b: Beneficiary;
   onSelect: (b: Beneficiary) => void;
   onSend: (b: Beneficiary) => void;
-  onToggleFav: (id: string) => void;
 }) => {
   const method = METHOD_CONFIG[b.method];
 
@@ -1222,7 +1218,6 @@ const BeneficiariesPage = () => {
                 b={b}
                 onSelect={setSelectedB}
                 onSend={setSendTarget}
-                onToggleFav={handleToggleFav}
               />
             ))}
           </div>

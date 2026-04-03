@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, EyeOff, ArrowUpRight, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { Wallet } from '@online-banking/types';
+import type { Wallet } from '../../../../types/dist/index.d';
 
 interface WalletCardProps {
   wallet: Wallet;
