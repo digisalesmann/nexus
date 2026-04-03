@@ -13,6 +13,10 @@ node_modules
 dist
 dist-ssr
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.local
 
 # Editor/project files
@@ -25,3 +29,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build outputs
+build/
+.next/
+.nuxt/
+.output/
+
+# Cache
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Vercel
+.vercel
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
