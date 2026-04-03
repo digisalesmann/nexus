@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm --workspace packages/web run build",
-  "outputDirectory": "packages/web/dist",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
