@@ -8,6 +8,9 @@
     "module": "ESNext",
     "types": ["vite/client"],
     "skipLibCheck": true,
+    "paths": {
+      "@online-banking/types": ["../../packages/types/dist/index.d.ts"]
+    },
 
     /* Bundler mode */
     "moduleResolution": "bundler",
