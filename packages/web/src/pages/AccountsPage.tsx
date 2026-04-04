@@ -444,7 +444,7 @@ const AccountsPage = () => {
               label="Top up"
               color="text-violet-600 dark:text-violet-400"
               bg="bg-violet-50 border-violet-100 dark:bg-violet-500/[0.08] dark:border-violet-500/15"
-              onClick={() => navigate('/top-up')}
+              onClick={() => navigate('/add-money')}
             />
           </div>
 

@@ -641,7 +641,7 @@ const AddMoneyPage = () => {
 
   if (step === 'success') {
     return (
-      <div className="w-full max-w-[520px]">
+      <div className="w-full max-w-[520px] mx-auto">
         <SuccessScreen
           amount={num} symbol={sym}
           account={account} method={method}
