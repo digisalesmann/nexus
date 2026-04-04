@@ -1,0 +1,29 @@
+import { Send } from 'lucide-react';
+
+export default function SendPage() {
+  return (
+    <div className="w-full max-w-[1400px] mx-auto pb-28">
+      <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-8 mb-12 md:mb-20 pt-6 md:pt-10 border-b border-stone-200 dark:border-white/5 pb-12 md:pb-16">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Send size={32} className="text-stone-400" />
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-stone-900 dark:text-white">
+              Send Money
+            </h1>
+          </div>
+          <p className="text-stone-500 dark:text-white/50 text-sm md:text-base">
+            Transfer funds to a beneficiary
+          </p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 gap-6">
+        <div className="p-6 rounded-2xl border border-stone-200 dark:border-white/10 bg-white dark:bg-white/5">
+          <p className="text-stone-500 dark:text-white/50 text-center py-12">
+            Send money feature coming soon
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

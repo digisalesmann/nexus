@@ -1,37 +1,46 @@
 import {
   Home, Repeat, CreditCard, History, Users,
   Settings, LogOut, Landmark, Briefcase, FileText,
-  MoreHorizontal, ChevronRight,
+  X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────────────────────
+
 const navGroups = [
   {
     label: 'Main',
     items: [
-      { icon: Home,      label: 'Overview',      href: '/' },
-      { icon: Landmark,  label: 'Accounts',      href: '/accounts' },
-      { icon: Repeat,    label: 'Convert',        href: '/swap' },
-      { icon: History,   label: 'History',        href: '/transactions' },
+      { icon: Home,       label: 'Overview',      href: '/'             },
+      { icon: Landmark,   label: 'Accounts',      href: '/accounts'     },
+      { icon: Repeat,     label: 'Convert',        href: '/swap'         },
+      { icon: History,    label: 'History',        href: '/transactions' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { icon: Briefcase,  label: 'Loans',          href: '/loans' },
-      { icon: CreditCard, label: 'My Cards',        href: '/cards' },
-      { icon: Users,      label: 'Beneficiaries',   href: '/recipients' },
-      { icon: FileText,   label: 'Reports',         href: '/reports' },
+      { icon: Briefcase,  label: 'Loans',          href: '/loans'        },
+      { icon: CreditCard, label: 'My Cards',        href: '/cards'        },
+      { icon: Users,      label: 'Beneficiaries',   href: '/recipients'   },
+      { icon: FileText,   label: 'Reports',         href: '/reports'      },
     ],
   },
 ];
 
-const allItems = navGroups.flatMap((g) => g.items);
+// First 4 shown in bottom nav, rest in "More" sheet
+const PRIMARY_NAV  = navGroups[0].items;                          // Overview, Accounts, Convert, History
+const SECONDARY_NAV = navGroups[1].items;                         // Loans, Cards, Beneficiaries, Reports
 
-// ── Logo mark ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGO
+// ─────────────────────────────────────────────────────────────────────────────
+
 const LogoMark = () => (
   <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
     <rect width="22" height="22" rx="6" className="fill-[#C9A84C]" />
@@ -39,13 +48,17 @@ const LogoMark = () => (
   </svg>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SIDEBAR (desktop only)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const Sidebar = () => {
-  const location = useLocation();
+  const location  = useLocation();
   const [showMore, setShowMore] = useState(false);
 
   return (
     <>
-      {/* ── DESKTOP SIDEBAR ──────────────────────────────────────────────────── */}
+      {/* ════════════════════════════════ DESKTOP SIDEBAR ══════════════════════ */}
       <aside className={cn(
         'hidden lg:flex flex-col w-[240px] h-screen fixed left-0 top-0 z-[100]',
         'bg-white dark:bg-[#111113]',
@@ -54,24 +67,26 @@ export const Sidebar = () => {
       )}>
 
         {/* Logo */}
-        <div className="px-6 pt-7 pb-8 flex items-center gap-3">
+        <div className="px-6 pt-7 pb-6 flex items-center gap-3">
           <LogoMark />
           <span className="text-stone-900 dark:text-white font-semibold text-[15px] tracking-[-0.4px]">
             Nexus
           </span>
-          <span className="ml-auto text-[9px] font-bold tracking-[0.15em] uppercase text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
+          <span className="ml-auto text-[9px] font-bold tracking-[0.15em] uppercase
+            text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
             Private
           </span>
         </div>
 
-        {/* Divider */}
-        <div className="mx-6 h-px bg-stone-100 dark:bg-white/[0.05] mb-6" />
+        <div className="mx-6 h-px bg-stone-100 dark:bg-white/[0.05] mb-5" />
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 space-y-6 overflow-y-auto">
+        {/* Nav groups */}
+        <nav className="flex-1 px-3 overflow-y-auto space-y-5
+          [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {navGroups.map((group) => (
             <div key={group.label}>
-              <p className="px-3 mb-1.5 text-[9px] font-bold tracking-[0.18em] uppercase text-stone-400 dark:text-white/20">
+              <p className="px-3 mb-1 text-[9px] font-bold tracking-[0.18em] uppercase
+                text-stone-400 dark:text-white/20">
                 {group.label}
               </p>
               <div className="space-y-0.5">
@@ -82,28 +97,30 @@ export const Sidebar = () => {
                       key={item.href}
                       to={item.href}
                       className={cn(
-                        'relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors',
+                        'relative flex items-center gap-3 px-3 py-2.5 rounded-xl',
+                        'text-[13px] font-medium transition-all group',
                         isActive
-                          ? 'text-stone-900 dark:text-white'
-                          : 'text-stone-500 dark:text-white/35 hover:text-stone-800 dark:hover:text-white/65 hover:bg-stone-100 dark:hover:bg-white/[0.04]'
+                          ? 'text-stone-900 dark:text-white bg-stone-100 dark:bg-white/[0.06]'
+                          : 'text-stone-500 dark:text-white/35 hover:text-stone-800 dark:hover:text-white/65 hover:bg-stone-50 dark:hover:bg-white/[0.03]'
                       )}
                     >
+                      {/* Active indicator — small gold dot on the right, no border */}
                       {isActive && (
-                        <motion.div
-                          layoutId="sidebar-pill"
-                          className="absolute inset-0 rounded-xl bg-stone-100 dark:bg-white/[0.06]"
-                          style={{ borderLeft: '2px solid #C9A84C' }}
-                          transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                        <motion.span
+                          layoutId="sidebar-dot"
+                          className="absolute right-3 w-1.5 h-1.5 rounded-full bg-[#C9A84C]"
+                          transition={{ type: 'spring', bounce: 0.3, duration: 0.35 }}
                         />
                       )}
+
                       <item.icon
                         size={14}
                         className={cn(
-                          'z-10 shrink-0 transition-colors',
-                          isActive ? 'text-[#C9A84C]' : 'opacity-50'
+                          'shrink-0 transition-colors',
+                          isActive ? 'text-[#C9A84C]' : 'opacity-40 group-hover:opacity-70'
                         )}
                       />
-                      <span className="z-10 tracking-[-0.1px]">{item.label}</span>
+                      <span className="tracking-[-0.1px]">{item.label}</span>
                     </Link>
                   );
                 })}
@@ -113,22 +130,22 @@ export const Sidebar = () => {
         </nav>
 
         {/* Footer */}
-        <div className="px-3 pt-4 pb-6 border-t border-stone-100 dark:border-white/[0.05] space-y-0.5">
+        <div className="px-3 pt-3 pb-6 border-t border-stone-100 dark:border-white/[0.05] space-y-0.5">
           <Link
             to="/settings"
             className={cn(
               'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors',
               'text-stone-500 dark:text-white/35',
               'hover:text-stone-800 dark:hover:text-white/70',
-              'hover:bg-stone-100 dark:hover:bg-white/[0.04]'
+              'hover:bg-stone-50 dark:hover:bg-white/[0.03]'
             )}
           >
-            <Settings size={14} className="opacity-50 shrink-0" />
+            <Settings size={14} className="opacity-40 shrink-0" />
             Settings
           </Link>
           <button className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors',
-            'text-red-400/70 dark:text-red-400/50',
+            'text-red-400/60 dark:text-red-400/40',
             'hover:text-red-500 dark:hover:text-red-400',
             'hover:bg-red-50 dark:hover:bg-red-500/[0.06]'
           )}>
@@ -136,13 +153,15 @@ export const Sidebar = () => {
             Logout
           </button>
 
-          {/* Avatar row */}
-          <div className="flex items-center gap-3 px-3 pt-4">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#8B6F2E] flex items-center justify-center text-[#0C0C0D] text-[11px] font-bold shrink-0">
+          {/* Avatar */}
+          <div className="flex items-center gap-3 px-3 pt-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#8B6F2E]
+              flex items-center justify-center text-[#0C0C0D] text-[11px] font-bold shrink-0">
               V
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-stone-900 dark:text-white leading-none tracking-[-0.2px]">
+              <p className="text-[12.5px] font-semibold text-stone-900 dark:text-white
+                leading-none tracking-[-0.2px]">
                 Victor
               </p>
               <p className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-[0.15em] mt-0.5">
@@ -154,58 +173,94 @@ export const Sidebar = () => {
         </div>
       </aside>
 
-      {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────────────── */}
+      {/* ════════════════════════════════ MOBILE BOTTOM NAV ════════════════════ */}
+      {/*
+        Design: floating pill bar that sits above the safe area.
+        4 primary items + a "More" grid button.
+        Active item gets a gold filled icon + label; inactive items are just icons.
+      */}
       <nav className={cn(
-        'lg:hidden fixed bottom-0 inset-x-0 h-[64px] z-[100]',
-        'bg-white/95 dark:bg-[#111113]/95 backdrop-blur-2xl',
-        'border-t border-stone-200 dark:border-white/[0.06]',
-        'px-2 flex items-center justify-around'
+        'lg:hidden fixed bottom-0 inset-x-0 z-[100]',
+        'px-3 pb-3 pt-2',
+        'bg-transparent pointer-events-none'   // outer wrapper transparent so shadow clips naturally
       )}>
-        {allItems.slice(0, 4).map((item) => {
-          const isActive = location.pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              className="flex flex-col items-center gap-1 px-3 py-1"
-            >
-              <div className={cn(
-                'p-2 rounded-xl transition-all',
-                isActive
-                  ? 'bg-[#C9A84C]/15 text-[#C9A84C]'
-                  : 'text-stone-400 dark:text-white/30'
-              )}>
-                <item.icon size={18} />
-              </div>
-              <span className={cn(
-                'text-[9px] font-bold tracking-wide uppercase transition-colors',
-                isActive
-                  ? 'text-[#C9A84C]'
-                  : 'text-stone-400 dark:text-white/25'
-              )}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+        <div className={cn(
+          'pointer-events-auto',
+          'flex items-center justify-around',
+          'h-[60px] rounded-2xl',
+          'bg-white/95 dark:bg-[#111113]/95 backdrop-blur-2xl',
+          'border border-stone-200/80 dark:border-white/[0.08]',
+          'shadow-lg shadow-black/[0.08] dark:shadow-black/40',
+          'px-1'
+        )}>
 
-        <button
-          onClick={() => setShowMore(true)}
-          className="flex flex-col items-center gap-1 px-3 py-1"
-        >
-          <div className="p-2 rounded-xl text-stone-400 dark:text-white/30">
-            <MoreHorizontal size={18} />
-          </div>
-          <span className="text-[9px] font-bold tracking-wide uppercase text-stone-400 dark:text-white/25">
-            More
-          </span>
-        </button>
+          {/* 4 primary nav items */}
+          {PRIMARY_NAV.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 group"
+              >
+                <div className={cn(
+                  'relative flex items-center justify-center w-9 h-8 rounded-xl transition-all duration-200',
+                  isActive
+                    ? 'bg-[#C9A84C] shadow-sm shadow-[#C9A84C]/30'
+                    : 'group-active:bg-stone-100 dark:group-active:bg-white/[0.06]'
+                )}>
+                  <item.icon
+                    size={17}
+                    className={cn(
+                      'transition-colors duration-200',
+                      isActive
+                        ? 'text-[#0C0C0D]'
+                        : 'text-stone-400 dark:text-white/30'
+                    )}
+                  />
+                </div>
+                <span className={cn(
+                  'text-[9px] font-bold tracking-wide transition-colors duration-200',
+                  isActive
+                    ? 'text-[#C9A84C]'
+                    : 'text-stone-400 dark:text-white/25'
+                )}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-stone-200 dark:bg-white/[0.07] shrink-0" />
+
+          {/* More button */}
+          <button
+            onClick={() => setShowMore(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 group"
+          >
+            <div className="flex items-center justify-center w-9 h-8 rounded-xl transition-all
+              group-active:bg-stone-100 dark:group-active:bg-white/[0.06]">
+              {/* 2×2 grid of dots — "More" icon */}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="4.5" cy="4.5" r="1.5" className="fill-stone-400 dark:fill-white/30" />
+                <circle cx="11.5" cy="4.5" r="1.5" className="fill-stone-400 dark:fill-white/30" />
+                <circle cx="4.5" cy="11.5" r="1.5" className="fill-stone-400 dark:fill-white/30" />
+                <circle cx="11.5" cy="11.5" r="1.5" className="fill-stone-400 dark:fill-white/30" />
+              </svg>
+            </div>
+            <span className="text-[9px] font-bold tracking-wide text-stone-400 dark:text-white/25">
+              More
+            </span>
+          </button>
+        </div>
       </nav>
 
-      {/* ── MOBILE MORE SHEET ────────────────────────────────────────────────── */}
+      {/* ════════════════════════════════ MORE SHEET ═══════════════════════════ */}
       <AnimatePresence>
         {showMore && (
           <div className="fixed inset-0 z-[200] lg:hidden">
+            {/* Backdrop */}
             <motion.div
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               initial={{ opacity: 0 }}
@@ -213,60 +268,113 @@ export const Sidebar = () => {
               exit={{ opacity: 0 }}
               onClick={() => setShowMore(false)}
             />
+
+            {/* Sheet */}
             <motion.div
-              className="absolute bottom-0 inset-x-0 bg-white dark:bg-[#161618] rounded-t-2xl p-6 pb-10"
+              className="absolute bottom-0 inset-x-0 rounded-t-2xl overflow-hidden
+                bg-white dark:bg-[#161618]"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}
+              transition={{ type: 'spring', bounce: 0.08, duration: 0.38 }}
             >
-              <div className="flex items-center justify-between mb-5">
-                <span className="text-stone-900 dark:text-white font-semibold text-[15px] tracking-[-0.3px]">
-                  More
-                </span>
+              {/* Handle + header */}
+              <div className="flex items-center justify-between px-5 pt-4 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <LogoMark />
+                  <span className="text-[15px] font-bold tracking-[-0.3px]
+                    text-stone-900 dark:text-white">
+                    Menu
+                  </span>
+                </div>
                 <button
                   onClick={() => setShowMore(false)}
-                  className="text-stone-400 dark:text-white/40 hover:text-stone-700 dark:hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-stone-100 dark:hover:bg-white/[0.06]"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors
+                    text-stone-400 dark:text-white/30
+                    hover:bg-stone-100 dark:hover:bg-white/[0.06]
+                    hover:text-stone-700 dark:hover:text-white/60"
                 >
-                  ×
+                  <X size={16} />
                 </button>
               </div>
-              <div className="space-y-0.5">
-                {allItems.slice(4).map((item) => {
-                  const isActive = location.pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      onClick={() => setShowMore(false)}
-                      className={cn(
-                        'flex items-center justify-between px-4 py-3.5 rounded-xl text-[14px] font-medium transition-colors',
-                        isActive
-                          ? 'bg-[#C9A84C]/10 text-[#C9A84C]'
-                          : 'text-stone-600 dark:text-white/60 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-white/[0.04]'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <item.icon size={16} className="shrink-0" />
-                        {item.label}
-                      </div>
-                      <ChevronRight size={13} className="opacity-30" />
-                    </Link>
-                  );
-                })}
 
-                <div className="pt-3 border-t border-stone-100 dark:border-white/[0.06] mt-3 space-y-0.5">
-                  <button className={cn(
-                    'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-[14px] font-medium transition-colors',
-                    'text-stone-600 dark:text-white/60 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-white/[0.04]'
-                  )}>
-                    <Settings size={16} /> Settings
-                  </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-[14px] font-medium text-red-400/70 hover:text-red-500 transition-colors">
-                    <LogOut size={16} /> Logout
-                  </button>
+              {/* Finance section — 2×2 grid of icon cards */}
+              <div className="px-4 pb-2">
+                <p className="text-[9px] font-bold tracking-[0.18em] uppercase mb-3
+                  text-stone-400 dark:text-white/25">
+                  Finance
+                </p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {SECONDARY_NAV.map((item) => {
+                    const isActive = location.pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        onClick={() => setShowMore(false)}
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all',
+                          isActive
+                            ? 'bg-[#C9A84C]/10 dark:bg-[#C9A84C]/[0.12] border-[#C9A84C]/25'
+                            : 'bg-stone-50 dark:bg-white/[0.03] border-stone-200 dark:border-white/[0.07] hover:border-stone-300 dark:hover:border-white/[0.14]'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-8 h-8 rounded-xl flex items-center justify-center shrink-0',
+                          isActive
+                            ? 'bg-[#C9A84C]/20 dark:bg-[#C9A84C]/[0.15]'
+                            : 'bg-white dark:bg-white/[0.06]'
+                        )}>
+                          <item.icon
+                            size={15}
+                            className={isActive ? 'text-[#C9A84C]' : 'text-stone-500 dark:text-white/35'}
+                          />
+                        </div>
+                        <span className={cn(
+                          'text-[13px] font-semibold tracking-[-0.1px]',
+                          isActive
+                            ? 'text-[#C9A84C]'
+                            : 'text-stone-700 dark:text-white/60'
+                        )}>
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Settings + Logout */}
+              <div className="mx-4 my-3 pt-3 border-t border-stone-100 dark:border-white/[0.06]
+                flex items-center gap-2">
+                <Link
+                  to="/settings"
+                  onClick={() => setShowMore(false)}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2.5 py-3 rounded-xl border text-[13px] font-semibold transition-colors',
+                    'bg-stone-50 dark:bg-white/[0.03]',
+                    'border-stone-200 dark:border-white/[0.07]',
+                    'text-stone-600 dark:text-white/50',
+                    'hover:text-stone-900 dark:hover:text-white hover:border-stone-300'
+                  )}
+                >
+                  <Settings size={14} className="shrink-0 opacity-60" />
+                  Settings
+                </Link>
+                <button className={cn(
+                  'flex-1 flex items-center justify-center gap-2.5 py-3 rounded-xl border text-[13px] font-semibold transition-colors',
+                  'bg-red-50 dark:bg-red-500/[0.07]',
+                  'border-red-100 dark:border-red-500/[0.15]',
+                  'text-red-500/80 dark:text-red-400/70',
+                  'hover:text-red-500 dark:hover:text-red-400'
+                )}>
+                  <LogOut size={14} className="shrink-0" />
+                  Log out
+                </button>
+              </div>
+
+              {/* Safe area spacer */}
+              <div className="h-6" />
             </motion.div>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Send, ArrowLeftRight, Clock } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -10,13 +11,14 @@ const CURRENCIES = [
 ];
 
 const QUICK_ACTIONS = [
-  { icon: Plus,           label: 'Add money', primary: true  },
-  { icon: Send,           label: 'Send',      primary: false },
-  { icon: ArrowLeftRight, label: 'Convert',   primary: false },
-  { icon: Clock,          label: 'Request',   primary: false },
+  { icon: Plus,           label: 'Add money', primary: true,  path: '/add-money' },
+  { icon: Send,           label: 'Send',      primary: false, path: '/send' },
+  { icon: ArrowLeftRight, label: 'Convert',   primary: false, path: '/swap' },
+  { icon: Clock,          label: 'Request',   primary: false, path: '/request' },
 ];
 
 export const BalanceHero = () => {
+  const navigate = useNavigate();
   const [activeCur, setActiveCur] = useState(0);
   const cur = CURRENCIES[activeCur];
 
@@ -100,9 +102,11 @@ export const BalanceHero = () => {
       {/* ── Action buttons ──
           2-col grid on mobile, natural row on sm+ */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2.5">
-        {QUICK_ACTIONS.map(({ icon: Icon, label, primary }) => (
+        {QUICK_ACTIONS.map(({ icon: Icon, label, primary, path }) => (
           <button
             key={label}
+            type="button"
+            onClick={() => navigate(path)}
             className={cn(
               'flex items-center justify-center sm:justify-start gap-2.5',
               'px-4 py-3 sm:py-2.5 rounded-xl',
