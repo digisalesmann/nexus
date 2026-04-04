@@ -1295,7 +1295,7 @@ const LoansPage = () => {
           </div>
 
           <div>
-            <SectionRule label="Why Nexus credit" />
+            <SectionRule label="Why Stonegate credit" />
             <div className="space-y-2.5">
               {[
                 { icon: Zap,    title: 'Instant approval',   sub: 'Decision in under 60 seconds'    },

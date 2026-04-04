@@ -101,13 +101,13 @@ const METHODS: FundingMethod[] = [
 const QUICK_AMOUNTS = [1000, 5000, 10000, 25000, 50000];
 
 const BANK_DETAILS = {
-  bankName:    'Nexus Settlement Bank',
+  bankName:    'Stonegate Settlement Bank',
   accountName: 'Victor Okafor',
   accountNum:  '0123456789',
   sortCode:    '04-00-04',
   iban:        'GB29NWBK60161331926819',
   swift:       'NXUSgb2L',
-  reference:   'NXS-TOP-4721',
+  reference:   'STG-TOP-4721',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -545,7 +545,7 @@ const SuccessScreen = ({
   amount: number; symbol: string; account: Account;
   method: FundingMethod; onReset: () => void;
 }) => {
-  const ref = `NXS-DEP-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const ref = `STG-DEP-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
   const fee = method.id === 'card' ? amount * 0.015 : 0;
 
   return (

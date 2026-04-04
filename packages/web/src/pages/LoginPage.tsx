@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const LogoMark = () => (
-  <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
-    <rect width="22" height="22" rx="6" fill="#C9A84C" />
-    <path d="M5 11h12M5 7.5h8M5 14.5h5" stroke="#0C0C0D" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
+  <img src="/sg.jpeg" alt="Stonegate" width={28} height={28}
+    style={{ width: 28, height: 28, borderRadius: 7, objectFit: 'cover', display: 'block' }} />
 );
 
 const LoginPage = () => {
@@ -21,7 +19,7 @@ const LoginPage = () => {
         <Link to="/" className="flex items-center gap-2.5">
           <LogoMark />
           <span className="text-[15px] font-bold tracking-[-0.3px] text-stone-900 dark:text-white">
-            Nexus
+            Stonegate
           </span>
         </Link>
         <p className="text-[13px] text-stone-500 dark:text-white/40">
@@ -44,7 +42,7 @@ const LoginPage = () => {
               Welcome back
             </h1>
             <p className="text-[14px] text-stone-500 dark:text-white/40">
-              Sign in to your Nexus account
+              Sign in to your Stonegate account
             </p>
           </div>
 

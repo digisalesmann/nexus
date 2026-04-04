@@ -525,7 +525,7 @@ export const SwapPage = () => {
               { l: 'Rate',         v: `1 ${fromCur.code} = ${fmtRate(rate)} ${toCur.code}` },
               { l: 'Fee (0.5%)',   v: fmtAmount(fee, fromCur.code) },
               { l: 'You received', v: fmtAmount(youGet, toCur.code) },
-              { l: 'Reference',    v: `NXS-${Math.random().toString(36).slice(2, 8).toUpperCase()}` },
+              { l: 'Reference',    v: `STG-${Math.random().toString(36).slice(2, 8).toUpperCase()}` },
             ].map(r => (
               <div key={r.l} className="flex justify-between gap-4 py-1.5">
                 <span className="text-[12px] text-stone-400 dark:text-white/30 shrink-0">{r.l}</span>
@@ -859,7 +859,7 @@ export const SwapPage = () => {
                 <>
                   <FeeRow label="Amount to convert" value={fmtAmount(fromNum, fromCur.code)} />
                   <FeeRow label="Exchange rate"      value={fmtRate(rate)} muted />
-                  <FeeRow label="Nexus fee (0.5%)"   value={`– ${fmtAmount(fee, fromCur.code)}`} muted />
+                  <FeeRow label="Stonegate fee (0.5%)"   value={`– ${fmtAmount(fee, fromCur.code)}`} muted />
                   <FeeRow label="Net converted"      value={fmtAmount(fromNum - fee, fromCur.code)} muted />
                   <FeeRow label="You receive"        value={fmtAmount(youGet, toCur.code)} bold accent />
                 </>
@@ -871,9 +871,9 @@ export const SwapPage = () => {
             </div>
           </div>
 
-          {/* Why Nexus FX */}
+          {/* Why Stonegate FX */}
           <div>
-            <SectionRule label="Why Nexus FX" />
+            <SectionRule label="Why Stonegate FX" />
             <div className="space-y-2.5">
               {[
                 { icon: Zap,    title: 'Instant settlement',  sub: 'Funds arrive in seconds, not days'   },

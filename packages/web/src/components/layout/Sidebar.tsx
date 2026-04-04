@@ -16,7 +16,7 @@ const navGroups = [
   {
     label: 'Main',
     items: [
-      { icon: Home,       label: 'Overview',      href: '/'             },
+      { icon: Home,       label: 'Overview',      href: '/dashboard'    },
       { icon: Landmark,   label: 'Accounts',      href: '/accounts'     },
       { icon: Repeat,     label: 'Convert',        href: '/swap'         },
       { icon: History,    label: 'History',        href: '/transactions' },
@@ -42,10 +42,8 @@ const SECONDARY_NAV = navGroups[1].items;                         // Loans, Card
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LogoMark = () => (
-  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-    <rect width="22" height="22" rx="6" className="fill-[#C9A84C]" />
-    <path d="M5 11h12M5 7.5h8M5 14.5h5" stroke="#0C0C0D" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
+  <img src="/sg.jpeg" alt="Stonegate" width={22} height={22}
+    style={{ width: 22, height: 22, borderRadius: 6, objectFit: 'cover', display: 'block' }} />
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,16 +65,12 @@ export const Sidebar = () => {
       )}>
 
         {/* Logo */}
-        <div className="px-6 pt-7 pb-6 flex items-center gap-3">
+        <Link to="/" className="px-6 pt-7 pb-6 flex items-center gap-3">
           <LogoMark />
           <span className="text-stone-900 dark:text-white font-semibold text-[15px] tracking-[-0.4px]">
-            Nexus
+            Stonegate
           </span>
-          <span className="ml-auto text-[9px] font-bold tracking-[0.15em] uppercase
-            text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full">
-            Private
-          </span>
-        </div>
+        </Link>
 
         <div className="mx-6 h-px bg-stone-100 dark:bg-white/[0.05] mb-5" />
 

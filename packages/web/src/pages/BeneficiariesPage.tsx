@@ -48,7 +48,7 @@ interface Beneficiary {
 const BENEFICIARIES: Beneficiary[] = [
   { id:'b01', type:'individual', name:'James Okonkwo',    initials:'JO', color:'from-sky-500 to-blue-600',      bank:'Zenith Bank',          accountNum:'2034567890',    currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'bank',   favourite:true,  lastSent:'2h ago',    lastAmount:'₦250,000', totalSent:'₦1.2M'   },
   { id:'b02', type:'individual', name:'Amina Bello',      initials:'AB', color:'from-violet-500 to-purple-600', bank:'Barclays UK',           accountNum:'GB29NWBK',      currency:'GBP', country:'United Kingdom',countryCode:'GBP', method:'bank',   favourite:true,  lastSent:'Yesterday', lastAmount:'£250.00', totalSent:'£2,400'  },
-  { id:'b03', type:'individual', name:'Chioma Eze',       initials:'CE', color:'from-emerald-500 to-teal-600',  bank:'Nexus',                 accountNum:'NXS-10293',     currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'nexus',  favourite:true,  lastSent:'3d ago',    lastAmount:'₦50,000', totalSent:'₦620,000'},
+  { id:'b03', type:'individual', name:'Chioma Eze',       initials:'CE', color:'from-emerald-500 to-teal-600',  bank:'Stonegate',                 accountNum:'STG-10293',     currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'nexus',  favourite:true,  lastSent:'3d ago',    lastAmount:'₦50,000', totalSent:'₦620,000'},
   { id:'b04', type:'individual', name:'David Mensah',     initials:'DM', color:'from-rose-500 to-pink-600',     bank:'Ecobank Ghana',         accountNum:'0024512834',    currency:'USD', country:'Ghana',         countryCode:'USD', method:'bank',   favourite:false, lastSent:'1w ago',    lastAmount:'$320.00', totalSent:'$1,800'  },
   { id:'b05', type:'individual', name:'Fatima Al-Rashid', initials:'FA', color:'from-amber-500 to-orange-600',  bank:'Emirates NBD',          accountNum:'AE070331234',   currency:'USD', country:'UAE',           countryCode:'USD', method:'bank',   favourite:false, lastSent:'2w ago',    lastAmount:'$1,080', totalSent:'$5,200'  },
   { id:'b06', type:'business',   name:'TechCorp Ltd.',    initials:'TC', color:'from-slate-500 to-slate-700',   bank:'JP Morgan Chase',       accountNum:'US29CHAS0001',  currency:'USD', country:'United States', countryCode:'USD', method:'bank',   favourite:true,  lastSent:'5d ago',    lastAmount:'$4,500', totalSent:'$27,000' },
@@ -70,7 +70,7 @@ const GROUP_LABELS: Record<FilterGroup, string> = {
 
 const METHOD_CONFIG: Record<TransferMethod, { label: string; color: string }> = {
   bank:   { label: 'Bank transfer', color: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10'             },
-  nexus:  { label: 'Nexus wallet',  color: 'text-[#C9A84C] bg-[#C9A84C]/10'                                           },
+  nexus:  { label: 'Stonegate wallet',  color: 'text-[#C9A84C] bg-[#C9A84C]/10'                                           },
   mobile: { label: 'Mobile money',  color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10'},
 };
 
@@ -185,7 +185,7 @@ const BeneficiaryCard = ({
           'text-[9px] font-bold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-full shrink-0',
           method.color
         )}>
-          {b.method === 'nexus' ? 'Nexus' : b.method === 'mobile' ? 'Mobile' : 'Bank'}
+          {b.method === 'nexus' ? 'Stonegate' : b.method === 'mobile' ? 'Mobile' : 'Bank'}
         </span>
       </div>
 
@@ -281,7 +281,7 @@ const BeneficiaryRow = ({
         'text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-flex',
         method.color
       )}>
-        {b.method === 'nexus' ? 'Nexus' : b.method === 'mobile' ? 'Mobile' : 'Bank'}
+        {b.method === 'nexus' ? 'Stonegate' : b.method === 'mobile' ? 'Mobile' : 'Bank'}
       </span>
 
       {/* Last sent */}
@@ -507,7 +507,7 @@ const SendSheet = ({ b, onClose }: { b: Beneficiary; onClose: () => void }) => {
   const sym = b.currency === 'NGN' ? '₦' : b.currency === 'GBP' ? '£' : b.currency === 'EUR' ? '€' : '$';
   const num = parseFloat(amount) || 0;
   const fee = num * 0.005;
-  const ref = `NXS-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const ref = `STG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
   return (
     <>
@@ -817,7 +817,7 @@ const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
         <div className="flex gap-2 mb-5">
           {([
             { id: 'bank'  as TransferMethod, label: 'Bank account', icon: Building2 },
-            { id: 'nexus' as TransferMethod, label: 'Nexus wallet', icon: Globe     },
+            { id: 'nexus' as TransferMethod, label: 'Stonegate wallet', icon: Globe     },
             { id: 'mobile'as TransferMethod, label: 'Mobile money', icon: User      },
           ]).map(m => (
             <button
@@ -845,8 +845,8 @@ const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
           {[
             { label: 'Full name',         placeholder: 'Recipient full name',   type: 'text'  },
             { label: 'Bank name',         placeholder: 'e.g. Zenith Bank',      type: 'text', show: method === 'bank' },
-            { label: method === 'nexus' ? 'Nexus ID / email' : method === 'mobile' ? 'Phone number' : 'Account number',
-              placeholder: method === 'nexus' ? 'user@nexus.com' : method === 'mobile' ? '+234 800 000 0000' : '0123456789',
+            { label: method === 'nexus' ? 'Stonegate ID / email' : method === 'mobile' ? 'Phone number' : 'Account number',
+              placeholder: method === 'nexus' ? 'user@stonegate.bank' : method === 'mobile' ? '+234 800 000 0000' : '0123456789',
               type: method === 'mobile' ? 'tel' : 'text' },
             { label: 'Currency',          placeholder: 'USD, NGN, GBP…',         type: 'text'  },
             { label: 'Country',           placeholder: 'Nigeria, UK, USA…',       type: 'text'  },

@@ -236,7 +236,7 @@ const QRCode = ({ size = 140 }: { size?: number }) => (
     ].map(([x,y],i) => (
       <rect key={i} x={x} y={y} width="4" height="4" rx="0.5" fill="#0C0C0D" />
     ))}
-    <text x="70" y="134" textAnchor="middle" fontSize="8" fill="#6b7280">nexus.pay/req</text>
+    <text x="70" y="134" textAnchor="middle" fontSize="8" fill="#6b7280">stonegate.pay/req</text>
   </svg>
 );
 
@@ -282,7 +282,7 @@ const CopyRow = ({ label, value, mono = true }: {
 const ShareOptions = ({ amount, sym, account, note }: {
   amount: number; sym: string; account: Account; note: string;
 }) => {
-  const link = `https://nexus.pay/req/${account.code.toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+  const link = `https://stonegate.pay/req/${account.code.toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
   const [emailInput, setEmailInput]   = useState('');
   const [emailSent,  setEmailSent]    = useState(false);
   const [activeTab,  setActiveTab]    = useState<'link' | 'qr' | 'email'>('link');
@@ -336,7 +336,7 @@ const ShareOptions = ({ amount, sym, account, note }: {
             <CopyRow label="Account number" value={account.accountNum} />
             <div className="pt-1">
               <p className="text-[10px] font-mono text-stone-400 dark:text-white/25">
-                Share this link — anyone can use it to pay you {sym}{amount > 0 ? amount.toFixed(2) : '(any amount)'}
+                Share this link, anyone can use it to pay you {sym}{amount > 0 ? amount.toFixed(2) : '(any amount)'}
               </p>
             </div>
           </div>
@@ -503,7 +503,7 @@ const SuccessScreen = ({
   contact: Contact | null; onReset: () => void;
 }) => {
   const sym = account.symbol;
-  const ref = `NXS-REQ-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const ref = `STG-REQ-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
   return (
     <div className={cn(

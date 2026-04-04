@@ -44,7 +44,7 @@ interface Recipient {
 const RECIPIENTS: Recipient[] = [
   { id:'r01', name:'Sophie Müller',      initials:'SM', color:'from-sky-500 to-blue-600',        bank:'Deutsche Bank',       accountNum:'DE89370400440532013000', currency:'EUR', countryCode:'EUR', country:'Germany',       method:'sepa',  favourite:true,  lastAmount:'€1,200.00', lastSent:'2h ago'    },
   { id:'r02', name:'Amina Bello',        initials:'AB', color:'from-violet-500 to-purple-600',   bank:'Barclays',            accountNum:'GB29NWBK60161331926819', currency:'GBP', countryCode:'GBP', country:'United Kingdom', method:'bank',  favourite:true,  lastAmount:'£850.00',   lastSent:'Yesterday' },
-  { id:'r03', name:'Marcus Chen',        initials:'MC', color:'from-emerald-500 to-teal-600',    bank:'Nexus',               accountNum:'NXS-10293',              currency:'USD', countryCode:'USD', country:'United States',  method:'nexus', favourite:true,  lastAmount:'$2,500.00', lastSent:'3d ago'    },
+  { id:'r03', name:'Marcus Chen',        initials:'MC', color:'from-emerald-500 to-teal-600',    bank:'Stonegate',               accountNum:'STG-10293',              currency:'USD', countryCode:'USD', country:'United States',  method:'nexus', favourite:true,  lastAmount:'$2,500.00', lastSent:'3d ago'    },
   { id:'r04', name:'Yuki Tanaka',        initials:'YT', color:'from-rose-500 to-pink-600',       bank:'Sumitomo Mitsui',     accountNum:'JP71036900101',          currency:'USD', countryCode:'USD', country:'Japan',          method:'swift', favourite:false, lastAmount:'$320.00',   lastSent:'1w ago'    },
   { id:'r05', name:'Fatima Al-Rashid',   initials:'FA', color:'from-amber-500 to-orange-600',    bank:'Emirates NBD',        accountNum:'AE070331234567890123456', currency:'USD', countryCode:'USD', country:'UAE',            method:'swift', favourite:false, lastAmount:'$1,080',    lastSent:'2w ago'    },
   { id:'r06', name:'TechCorp Ltd.',      initials:'TC', color:'from-slate-500 to-slate-700',     bank:'JP Morgan Chase',     accountNum:'US29CHAS00014060286',     currency:'USD', countryCode:'USD', country:'United States',  method:'swift', favourite:true,  lastAmount:'$4,500',    lastSent:'5d ago'    },
@@ -74,7 +74,7 @@ const QUICK_AMOUNTS = [100, 250, 500, 1000, 2500];
 
 const METHOD_CONFIG: Record<TransferMethod, { label: string; color: string }> = {
   bank:  { label:'Bank transfer', color:'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-500/10'               },
-  nexus: { label:'Nexus wallet',  color:'text-[#C9A84C] bg-[#C9A84C]/10'                                             },
+  nexus: { label:'Stonegate wallet',  color:'text-[#C9A84C] bg-[#C9A84C]/10'                                             },
   swift: { label:'SWIFT',         color:'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10'    },
   sepa:  { label:'SEPA',          color:'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10' },
 };
@@ -253,7 +253,7 @@ const METHODS_INTL: { id: TransferMethod; label: string; sub: string }[] = [
   { id: 'bank',  label: 'Local bank',   sub: 'Sort code / routing'    },
   { id: 'swift', label: 'SWIFT / Wire', sub: 'International transfers' },
   { id: 'sepa',  label: 'SEPA',         sub: 'Europe only, free'       },
-  { id: 'nexus', label: 'Nexus wallet', sub: 'Instant, no fee'         },
+  { id: 'nexus', label: 'Stonegate wallet', sub: 'Instant, no fee'         },
 ];
 
 // Method-specific account number placeholders and labels
@@ -261,7 +261,7 @@ const METHOD_FIELD: Record<TransferMethod, { label: string; placeholder: string;
   bank:  { label: 'Account number',    placeholder: '0123456789',          extra: [{ label: 'Sort code / Routing',  placeholder: '04-00-04 or 021000021' }] },
   swift: { label: 'IBAN / Account no.',placeholder: 'GB29NWBK60161331...',  extra: [{ label: 'SWIFT / BIC',          placeholder: 'NWBKGB2L'              }] },
   sepa:  { label: 'IBAN',              placeholder: 'DE89 3704 0044 0532...', extra: [{ label: 'BIC (optional)',      placeholder: 'COBADEFFXXX'            }] },
-  nexus: { label: 'Nexus ID or email', placeholder: 'user@nexus.com or NXS-XXXX', extra: [] },
+  nexus: { label: 'Stonegate ID or email', placeholder: 'user@stonegate.bank or STG-XXXX', extra: [] },
 };
 
 const NewRecipientForm = ({ onDone }: { onDone: (r: Recipient) => void }) => {
@@ -762,7 +762,7 @@ const SuccessStep = ({
 }) => {
   const sym  = account.symbol;
   const fee  = amount * FEE_PCT;
-  const ref  = `NXS-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const ref  = `STG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
   const [copied, setCopied] = useState(false);
 
   const handleCopyRef = () => {
@@ -1065,7 +1065,7 @@ const SendPage = () => {
             />
           </div>
           <div className="space-y-3">
-            <SectionRule label="Why Nexus transfers" />
+            <SectionRule label="Why Stonegate transfers" />
             {[
               { icon: Zap,    title: 'Instant settlement',  sub: 'Most transfers arrive in minutes' },
               { icon: Shield, title: 'Fully encrypted',     sub: '256-bit SSL, bank-grade security'  },

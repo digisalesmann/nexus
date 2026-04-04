@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 const LogoMark = () => (
-  <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
-    <rect width="22" height="22" rx="6" fill="#C9A84C" />
-    <path d="M5 11h12M5 7.5h8M5 14.5h5" stroke="#0C0C0D" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
+  <img src="/sg.jpeg" alt="Stonegate" width={28} height={28}
+    style={{ width: 28, height: 28, borderRadius: 7, objectFit: 'cover', display: 'block' }} />
 );
 
 const SignupPage = () => {
@@ -22,7 +20,7 @@ const SignupPage = () => {
         <Link to="/" className="flex items-center gap-2.5">
           <LogoMark />
           <span className="text-[15px] font-bold tracking-[-0.3px] text-stone-900 dark:text-white">
-            Nexus
+            Stonegate
           </span>
         </Link>
         <p className="text-[13px] text-stone-500 dark:text-white/40">
@@ -114,7 +112,7 @@ const SignupPage = () => {
               className="flex items-center justify-center w-full py-3.5 rounded-xl mt-2
                 bg-[#C9A84C] text-[#0C0C0D] text-[14px] font-bold
                 hover:bg-[#D4B558] transition-colors shadow-md shadow-[#C9A84C]/20">
-              Create account — it's free
+              Create account, it's free
             </Link>
           </form>
 

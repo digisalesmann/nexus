@@ -357,7 +357,7 @@ const CardFace = ({
             </div>
 
             <p className={cn('text-[9px] leading-relaxed', theme.sub)}>
-              This card is issued by Nexus Financial Services. Use is subject to the cardholder agreement.
+              This card is issued by Stonegate Financial Services. Use is subject to the cardholder agreement.
               For support: +1 800 NEXUS FIN
             </p>
 

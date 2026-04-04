@@ -349,7 +349,7 @@ const PasswordSheet = ({ onClose }: { onClose: () => void }) => {
 
 const SettingsPage = () => {
   const [name,    setName]    = useState('Victor Okafor');
-  const [email,   setEmail]   = useState('victor@nexusbank.io');
+  const [email,   setEmail]   = useState('victor@stonegate.bank');
   const [phone,   setPhone]   = useState('+234 812 345 6789');
   const [address, setAddress] = useState('Lagos, Nigeria');
 
@@ -367,7 +367,7 @@ const SettingsPage = () => {
   const [copied,       setCopied]       = useState(false);
 
   const handleCopyUID = () => {
-    navigator.clipboard?.writeText('NXS-4721-OKAFOR').catch(() => {});
+    navigator.clipboard?.writeText('STG-4721-OKAFOR').catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
@@ -448,9 +448,9 @@ const SettingsPage = () => {
             <div className="flex items-center gap-3 px-4 py-3.5">
               <div className="flex-1 min-w-0">
                 <p className="text-[9px] font-bold tracking-[0.15em] uppercase mb-1
-                  text-stone-400 dark:text-white/25">Nexus ID</p>
+                  text-stone-400 dark:text-white/25">Stonegate ID</p>
                 <p className="text-[13px] font-mono font-medium text-stone-800 dark:text-white/75">
-                  NXS-4721-OKAFOR
+                  STG-4721-OKAFOR
                 </p>
               </div>
               <button onClick={handleCopyUID}
@@ -531,7 +531,7 @@ const SettingsPage = () => {
             <SettingRow icon={LogOut} iconBg="bg-red-50 dark:bg-red-500/[0.08]" iconColor="text-red-400"
               label="Sign out" sub="Sign out of all devices" danger onClick={() => {}} />
             <SettingRow icon={Trash2} iconBg="bg-red-50 dark:bg-red-500/[0.08]" iconColor="text-red-400"
-              label="Close account" sub="Permanently delete your Nexus account"
+              label="Close account" sub="Permanently delete your Stonegate account"
               danger noBorder onClick={() => {}} />
           </SettingCard>
 
@@ -579,7 +579,7 @@ const SettingsPage = () => {
             <SettingRow icon={Globe} iconBg="bg-stone-100 dark:bg-white/[0.06]" iconColor="text-stone-500 dark:text-white/40"
               label="Language" sub="English (US)" onClick={() => {}} />
             <SettingRow icon={CreditCard} iconBg="bg-stone-100 dark:bg-white/[0.06]" iconColor="text-stone-500 dark:text-white/40"
-              label="Default currency" sub="USD — United States Dollar" onClick={() => {}} />
+              label="Default currency" sub="USD - United States Dollar" onClick={() => {}} />
             <SettingRow icon={User} iconBg="bg-stone-100 dark:bg-white/[0.06]" iconColor="text-stone-500 dark:text-white/40"
               label="Time zone" sub="Africa/Lagos (WAT, UTC+1)" onClick={() => {}} />
           </SettingCard>
@@ -608,7 +608,7 @@ const SettingsPage = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-stone-800 dark:text-white/80 leading-none">
-                  Nexus Private Banking
+                  Stonegate Banking
                 </p>
                 <p className="text-[11px] mt-0.5 text-stone-400 dark:text-white/25">Version 2.4.1 · Build 2025.04</p>
               </div>
@@ -618,7 +618,7 @@ const SettingsPage = () => {
               </span>
             </div>
             <SettingRow icon={AlertCircle} iconBg="bg-stone-100 dark:bg-white/[0.06]" iconColor="text-stone-500 dark:text-white/40"
-              label="Send feedback" sub="Help us improve Nexus" onClick={() => {}} />
+              label="Send feedback" sub="Help us improve Stonegate" onClick={() => {}} />
           </SettingCard>
 
         </div>{/* end right column */}

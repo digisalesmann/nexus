@@ -47,7 +47,7 @@ const ACCOUNTS: Account[] = [
     swift:         'NXUSGB2L',
     sortCode:      '04-00-04',
     routing:       '021000021',
-    bankName:      'Nexus Private Bank',
+    bankName:      'Stonegate Bank',
     accountHolder: 'Victor Okafor',
   },
   {
@@ -61,7 +61,7 @@ const ACCOUNTS: Account[] = [
     swift:         'NXUSGB2L',
     sortCode:      '04-00-04',
     routing:       '',
-    bankName:      'Nexus Private Bank',
+    bankName:      'Stonegate Bank',
     accountHolder: 'Victor Okafor',
   },
   {
@@ -75,7 +75,7 @@ const ACCOUNTS: Account[] = [
     swift:         'NXUSGB2L',
     sortCode:      '',
     routing:       '',
-    bankName:      'Nexus Private Bank',
+    bankName:      'Stonegate Bank',
     accountHolder: 'Victor Okafor',
   },
   {
@@ -89,7 +89,7 @@ const ACCOUNTS: Account[] = [
     swift:         'NXUSGB2L',
     sortCode:      '',
     routing:       '',
-    bankName:      'Nexus Private Bank',
+    bankName:      'Stonegate Bank',
     accountHolder: 'Victor Okafor',
   },
 ];
@@ -106,7 +106,7 @@ interface IncomingTx {
 }
 
 const RECENT_INCOMING: IncomingTx[] = [
-  { id:'i01', name:'Marcus Chen',    initials:'MC', color:'from-emerald-500 to-teal-600',  amount:'+$2,500.00', currency:'USD', time:'2h ago',    method:'Nexus wallet'  },
+  { id:'i01', name:'Marcus Chen',    initials:'MC', color:'from-emerald-500 to-teal-600',  amount:'+$2,500.00', currency:'USD', time:'2h ago',    method:'Stonegate wallet'  },
   { id:'i02', name:'Sophie Müller',  initials:'SM', color:'from-sky-500 to-blue-600',      amount:'+€380.00',   currency:'EUR', time:'Yesterday', method:'SEPA transfer' },
   { id:'i03', name:'TechCorp Ltd.',  initials:'TC', color:'from-slate-500 to-slate-700',   amount:'+$4,500.00', currency:'USD', time:'5d ago',    method:'Wire transfer'  },
   { id:'i04', name:'Amina Bello',    initials:'AB', color:'from-violet-500 to-purple-600', amount:'+£250.00',   currency:'GBP', time:'1w ago',    method:'Bank transfer'  },
@@ -232,7 +232,7 @@ const QRCode = ({ size = 160 }: { size?: number }) => (
     ))}
     <text x="80" y="154" textAnchor="middle" fontSize="8" fill="#9ca3af"
       fontFamily="monospace">
-      nexus.pay/receive
+      stonegate.pay/receive
     </text>
   </svg>
 );
@@ -473,7 +473,7 @@ const MethodTabs = ({ account }: { account: Account }) => {
   const tabs: { id: MethodTab; icon: React.ElementType; label: string }[] = [
     { id: 'local', icon: Building2, label: 'Local / ACH'  },
     { id: 'wire',  icon: Globe,     label: 'SWIFT / Wire' },
-    { id: 'nexus', icon: Wifi,      label: 'Nexus wallet' },
+    { id: 'nexus', icon: Wifi,      label: 'Stonegate wallet' },
   ];
 
   return (
@@ -556,7 +556,7 @@ const MethodTabs = ({ account }: { account: Account }) => {
               <CopyRow label="Account number" value={account.accountNum} accent large />
             )}
             <CopyRow label="SWIFT / BIC"    value={account.swift}                 />
-            <CopyRow label="Reference"      value={`NXS-${account.code}-4721`}    />
+            <CopyRow label="Reference"      value={`STG-${account.code}-4721`}    />
             <CopyRow label="Bank address"   value="25 Finsbury Square, London, EC2A 1AN" />
           </div>
         )}
@@ -569,12 +569,12 @@ const MethodTabs = ({ account }: { account: Account }) => {
               border border-[#C9A84C]/15">
               <Info size={13} className="text-[#C9A84C] shrink-0 mt-0.5" />
               <p className="text-[11px] text-[#C9A84C]/80">
-                Nexus-to-Nexus transfers are instant and completely free. Share your Nexus ID or email.
+                Stonegate-to-Stonegate transfers are instant and completely free. Share your Stonegate ID or email.
               </p>
             </div>
 
-            <CopyRow label="Nexus ID"    value="NXS-4721-OKAFOR" accent large />
-            <CopyRow label="Email"       value="victor@nexusbank.io"           />
+            <CopyRow label="Stonegate ID"    value="STG-4721-OKAFOR" accent large />
+            <CopyRow label="Email"       value="victor@stonegate.bank"           />
             <CopyRow label="Display name"value="Victor Okafor"                  />
           </div>
         )}
@@ -828,7 +828,7 @@ const ReceivePage = () => {
                 Reference number matters
               </p>
               <p className="text-[11px] text-amber-600/80 dark:text-amber-400/70">
-                Always ask the sender to include your reference <span className="font-mono font-bold">NXS-{account.code}-4721</span> to ensure funds are credited to the correct account without delay.
+                Always ask the sender to include your reference <span className="font-mono font-bold">STG-{account.code}-4721</span> to ensure funds are credited to the correct account without delay.
               </p>
             </div>
           </div>
@@ -859,7 +859,7 @@ const ReceivePage = () => {
             {[
               { icon: Building2, title: 'Local / ACH',   sub: 'Use account & sort/routing number for domestic transfers',   color: 'text-sky-600 dark:text-sky-400    bg-sky-50 dark:bg-sky-500/10'       },
               { icon: Globe,     title: 'SWIFT wire',    sub: 'Share IBAN + SWIFT code for international wires',            color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10' },
-              { icon: Wifi,      title: 'Nexus wallet',  sub: 'Share your Nexus ID for instant, fee-free transfers',        color: 'text-[#C9A84C] bg-[#C9A84C]/10'                                           },
+              { icon: Wifi,      title: 'Stonegate wallet',  sub: 'Share your Stonegate ID for instant, fee-free transfers',        color: 'text-[#C9A84C] bg-[#C9A84C]/10'                                           },
               { icon: ArrowUpRight, title: 'Request money', sub: 'Create a payment request with a shareable link',          color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10'},
             ].map(({ icon: Icon, title, sub, color }) => (
               <div key={title} className="flex items-start gap-3 py-3

@@ -18,7 +18,7 @@ export default {
         'light-secondary': "#4B5563", // Muted text (light)
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans Arabic', 'system-ui', 'sans-serif'],
       },
     },
   },

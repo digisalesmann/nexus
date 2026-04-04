@@ -99,10 +99,8 @@ const navGroups = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LogoMark = () => (
-  <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-    <rect width="22" height="22" rx="6" className="fill-[#C9A84C]" />
-    <path d="M5 11h12M5 7.5h8M5 14.5h5" stroke="#0C0C0D" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
+  <img src="/sg.jpeg" alt="Stonegate" width={20} height={20}
+    style={{ width: 20, height: 20, borderRadius: 5, objectFit: 'cover', display: 'block' }} />
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -351,7 +349,7 @@ const MobileDrawer = ({
                 <LogoMark />
                 <span className="text-[14px] font-bold tracking-[-0.3px]
                   text-stone-900 dark:text-white">
-                  Nexus
+                  Stonegate
                 </span>
               </div>
               <button
