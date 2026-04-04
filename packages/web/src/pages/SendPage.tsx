@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Copy,
   Clock,
-  Building2,
   User,
   AlertCircle,
   Shield,

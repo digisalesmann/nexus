@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -10,7 +10,6 @@ import {
   Calendar,
   FileText,
   BarChart2,
-  PieChart,
   CheckCircle2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -173,10 +172,9 @@ const StatCard = ({ label, value, sub, up, accent, icon: Icon }: {
 // BAR CHART (income vs expense — pure SVG, no deps)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BarChart = ({ months, data, period }: {
+const BarChart = ({ months, data }: {
   months: string[];
   data: Record<string, { income: number; expense: number }>;
-  period: Period;
 }) => {
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -923,7 +921,7 @@ const ReportsPage = () => {
         </div>
 
         {chartType === 'bar'
-          ? <BarChart months={months} data={MONTHLY_DATA} period={period} />
+          ? <BarChart months={months} data={MONTHLY_DATA} />
           : <LineChart months={months} data={MONTHLY_DATA} />
         }
       </div>

@@ -6,18 +6,14 @@ import {
   CheckCircle2,
   ChevronDown,
   Check,
-  Clock,
   Link2,
   Mail,
-  MessageSquare,
   QrCode,
-  Plus,
   ArrowDownLeft,
   Trash2,
   ChevronRight,
   Star,
   Send,
-  Info,
   Share2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';

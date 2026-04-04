@@ -357,7 +357,6 @@ const SettingsPage = () => {
   const [notifEmail,  setNotifEmail]  = useState(true);
   const [notifSMS,    setNotifSMS]    = useState(false);
   const [notifFX,     setNotifFX]     = useState(true);
-  const [notifLogin,  setNotifLogin]  = useState(true);
   const [biometric,   setBiometric]   = useState(true);
   const [twoFA,       setTwoFA]       = useState(true);
   const [loginAlerts, setLoginAlerts] = useState(true);
