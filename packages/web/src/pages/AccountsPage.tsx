@@ -11,11 +11,26 @@ import {
   EyeOff,
   Copy,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getFlag } from '../lib/utils';
+import { getFlag, CURRENCY_SYMBOLS } from '../lib/utils';
 import { cn } from '../lib/utils';
+import { useWallets } from '../hooks/useWallets';
+import { useFxRates } from '../hooks/useFxRates';
+
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'United States Dollar', EUR: 'European Euro', GBP: 'British Pound Sterling',
+  NGN: 'Nigerian Naira', CAD: 'Canadian Dollar', JPY: 'Japanese Yen',
+  CHF: 'Swiss Franc', AUD: 'Australian Dollar', AED: 'UAE Dirham', CNY: 'Chinese Yuan',
+  SGD: 'Singapore Dollar',
+};
+
+function fmtBalance(currency: string, amount: number): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? currency + ' ';
+  return sym + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION RULE
@@ -250,8 +265,8 @@ interface CurrencyRowProps {
   label: string;
   balance: string;
   rate: string;
-  change: string;
-  up: boolean;
+  change?: string;
+  up?: boolean;
 }
 
 const CurrencyRow = ({ currency, label, balance, rate, change, up }: CurrencyRowProps) => (
@@ -277,9 +292,11 @@ const CurrencyRow = ({ currency, label, balance, rate, change, up }: CurrencyRow
     </div>
 
     {/* Sparkline — hidden on very small screens */}
-    <div className="hidden sm:block shrink-0">
-      <Sparkline up={up} />
-    </div>
+    {up !== undefined && (
+      <div className="hidden sm:block shrink-0">
+        <Sparkline up={up} />
+      </div>
+    )}
 
     <div className="text-right shrink-0">
       <p className="text-[12px] sm:text-[13px] font-medium text-stone-800 dark:text-white/80
@@ -292,16 +309,18 @@ const CurrencyRow = ({ currency, label, balance, rate, change, up }: CurrencyRow
       </p>
     </div>
 
-    <div className="shrink-0">
-      <span className={cn(
-        'inline-flex items-center text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md',
-        up
-          ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400'
-      )}>
-        {up ? '+' : ''}{change}
-      </span>
-    </div>
+    {change !== undefined && (
+      <div className="shrink-0">
+        <span className={cn(
+          'inline-flex items-center text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md',
+          up
+            ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400'
+        )}>
+          {up ? '+' : ''}{change}
+        </span>
+      </div>
+    )}
 
     <ChevronRight
       size={13}
@@ -356,6 +375,18 @@ const LimitBar = ({
 
 const AccountsPage = () => {
   const navigate = useNavigate();
+  const { wallets, loading: walletsLoading, reload } = useWallets();
+  const { rates, loading: ratesLoading, refresh } = useFxRates();
+
+  const totalUSD = useMemo(() => {
+    if (!wallets.length || !Object.keys(rates).length) return 0;
+    return wallets.reduce((sum, w) => {
+      const r = rates[w.currency];
+      return sum + (r ? w.balance / r : 0);
+    }, 0);
+  }, [wallets, rates]);
+
+  const handleRefresh = () => { reload(); refresh(); };
 
   return (
     <div className="w-full">
@@ -381,41 +412,34 @@ const AccountsPage = () => {
 
           {/* Account cards grid */}
           <SectionRule label="My accounts" action={{ text: '+ Add account' }} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 lg:mb-10">
-            <AccountCard
-              currency="USD"
-              label="United States Dollar"
-              balance="$14,250.60"
-              accountNumber="4521 8830 1192 0047"
-              change="+$1,140.20"
-              up
-              primary
-            />
-            <AccountCard
-              currency="GBP"
-              label="British Pound Sterling"
-              balance="£2,100.00"
-              accountNumber="3309 5512 8820 1134"
-              change="+£88.00"
-              up
-            />
-            <AccountCard
-              currency="NGN"
-              label="Nigerian Naira"
-              balance="₦850,000.00"
-              accountNumber="0123 4567 8901"
-              change="-₦12,000.00"
-              up={false}
-            />
-            <AccountCard
-              currency="EUR"
-              label="European Euro"
-              balance="€0.00"
-              accountNumber="7712 0044 3391 6680"
-            />
-          </div>
+          {walletsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 lg:mb-10">
+              {[0,1].map(i => (
+                <div key={i} className="rounded-2xl border border-stone-200 dark:border-white/[0.07]
+                  bg-white dark:bg-white/[0.02] h-[148px] animate-pulse" />
+              ))}
+            </div>
+          ) : wallets.length === 0 ? (
+            <div className="rounded-2xl border border-stone-200 dark:border-white/[0.07]
+              bg-white dark:bg-white/[0.02] p-8 text-center mb-8">
+              <p className="text-[13px] text-stone-400 dark:text-white/30">No wallets yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 lg:mb-10">
+              {wallets.map(w => (
+                <AccountCard
+                  key={w.id}
+                  currency={w.currency}
+                  label={CURRENCY_NAMES[w.currency] ?? w.currency}
+                  balance={fmtBalance(w.currency, w.balance)}
+                  accountNumber={w.account_number}
+                  primary={w.is_primary}
+                />
+              ))}
+            </div>
+          )}
 
-          {/* Quick actions — flex row, equal-width on mobile */}
+          {/* Quick actions */}
           <SectionRule label="Actions" />
           <div className="flex items-start gap-3 sm:gap-6 mb-8 lg:mb-10">
             <QuickAction
@@ -449,20 +473,40 @@ const AccountsPage = () => {
           </div>
 
           {/* Exchange rates */}
-          <SectionRule label="Exchange rates" action={{ text: 'Refresh' }} />
+          <SectionRule label="Exchange rates"
+            action={{ text: ratesLoading ? 'Loading…' : 'Refresh', onClick: handleRefresh }} />
           <div className={cn(
             'rounded-2xl border overflow-hidden mb-8 lg:mb-10',
             'bg-white dark:bg-white/[0.02]',
             'border-stone-200 dark:border-white/[0.07]'
           )}>
-            <div className="px-3 sm:px-4 py-1">
-              <CurrencyRow currency="USD" label="United States Dollar"   balance="$14,250.60"   rate="1 USD = 1.000"       change="+0.8%"  up />
-              <CurrencyRow currency="GBP" label="British Pound Sterling" balance="£2,100.00"    rate="1 GBP = 1.2634 USD"  change="+1.2%"  up />
-              <CurrencyRow currency="EUR" label="European Euro"          balance="€0.00"        rate="1 EUR = 1.0821 USD"  change="-0.2%"  up={false} />
-              <CurrencyRow currency="NGN" label="Nigerian Naira"         balance="₦850,000.00"  rate="1 USD = 1,602 NGN"   change="-0.3%"  up={false} />
-              <CurrencyRow currency="CAD" label="Canadian Dollar"        balance="$0.00"        rate="1 CAD = 0.7341 USD"  change="+0.1%"  up />
-              <CurrencyRow currency="JPY" label="Japanese Yen"           balance="¥0.00"        rate="1 USD = 149.82 JPY"  change="-0.5%"  up={false} />
-            </div>
+            {wallets.length === 0 || ratesLoading ? (
+              <div className="px-4 py-6 text-center">
+                <p className="text-[12px] text-stone-400 dark:text-white/25">
+                  {ratesLoading ? 'Loading rates…' : 'No wallets to display'}
+                </p>
+              </div>
+            ) : (
+              <div className="px-3 sm:px-4 py-1">
+                {wallets.map(w => {
+                  const r = rates[w.currency];
+                  const rateStr = r
+                    ? w.currency === 'USD'
+                      ? '1 USD = 1.0000 USD'
+                      : `1 USD = ${r.toFixed(4)} ${w.currency}`
+                    : '—';
+                  return (
+                    <CurrencyRow
+                      key={w.id}
+                      currency={w.currency}
+                      label={CURRENCY_NAMES[w.currency] ?? w.currency}
+                      balance={fmtBalance(w.currency, w.balance)}
+                      rate={rateStr}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
 
         </div>{/* end left column */}
@@ -495,10 +539,27 @@ const AccountsPage = () => {
           <SectionRule label="Overview" />
           <div className="grid grid-cols-2 gap-2.5 mb-8">
             {[
-              { label: 'Total balance',  value: '$20,350',  sub: 'across 4 accounts' },
-              { label: 'Total received', value: '+$14.2k',  sub: 'this month',        accent: true },
-              { label: 'Total sent',     value: '-$8.4k',   sub: 'this month'        },
-              { label: 'Currencies',     value: '4',        sub: 'active wallets'    },
+              {
+                label: 'Total balance',
+                value: walletsLoading ? '…' : `$${totalUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                sub: `across ${wallets.length} wallet${wallets.length !== 1 ? 's' : ''}`,
+              },
+              {
+                label: 'Active currencies',
+                value: walletsLoading ? '…' : String(wallets.length),
+                sub: 'active wallets',
+                accent: true,
+              },
+              {
+                label: 'Primary wallet',
+                value: wallets.find(w => w.is_primary)?.currency ?? '—',
+                sub: 'default account',
+              },
+              {
+                label: 'FX rate source',
+                value: 'Live',
+                sub: 'updated every 5 min',
+              },
             ].map(s => (
               <div key={s.label} className={cn(
                 'rounded-2xl border p-3.5 flex flex-col gap-2',

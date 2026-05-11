@@ -14,14 +14,15 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFlag } from '../lib/utils';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Transaction as DBTx } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPES & DATA
+// TYPES & ADAPTER
 // ─────────────────────────────────────────────────────────────────────────────
 
 type TxType   = 'credit' | 'debit' | 'swap';
 type TxStatus = 'completed' | 'pending' | 'failed';
-type Currency = 'USD' | 'NGN' | 'GBP' | 'EUR' | 'CAD' | 'JPY';
 
 interface Transaction {
   id:        string;
@@ -31,48 +32,94 @@ interface Transaction {
   subtitle:  string;
   amount:    string;
   amountRaw: number;
-  currency:  Currency;
-  toCurrency?: Currency;
-  date:      string;       // ISO date string
-  dateLabel: string;       // human label for grouping
+  currency:  string;
+  toCurrency?: string;
+  date:      string;
+  dateLabel: string;
   ref:       string;
 }
 
-const TX_DATA: Transaction[] = [
-  // April 2025
-  { id:'t01', type:'credit', status:'completed', title:'Received from James O.',   subtitle:'Wire transfer',           amount:'+$1,200.00', amountRaw:1200,   currency:'USD', date:'2025-04-03', dateLabel:'Today',         ref:'NXS-A10293' },
-  { id:'t02', type:'swap',   status:'completed', title:'USD → NGN conversion',      subtitle:'FX swap · Rate 1,618',    amount:'-$500.00',   amountRaw:-500,   currency:'USD', toCurrency:'NGN', date:'2025-04-03', dateLabel:'Today',         ref:'NXS-A10294' },
-  { id:'t03', type:'debit',  status:'pending',   title:'Rent payment',              subtitle:'Standing order',          amount:'-₦250,000',  amountRaw:-250000,currency:'NGN', date:'2025-04-03', dateLabel:'Today',         ref:'NXS-A10295' },
-  { id:'t04', type:'debit',  status:'completed', title:'Sent to Amina B.',          subtitle:'Bank transfer · GBP',     amount:'-£250.00',   amountRaw:-250,   currency:'GBP', date:'2025-04-02', dateLabel:'Yesterday',     ref:'NXS-A10280' },
-  { id:'t05', type:'credit', status:'completed', title:'Received from client',      subtitle:'Invoice #4421 · EUR',     amount:'+€3,800.00', amountRaw:3800,   currency:'EUR', date:'2025-04-02', dateLabel:'Yesterday',     ref:'NXS-A10279' },
-  { id:'t06', type:'swap',   status:'completed', title:'GBP → EUR conversion',      subtitle:'FX swap · Rate 1.163',    amount:'-£400.00',   amountRaw:-400,   currency:'GBP', toCurrency:'EUR', date:'2025-04-02', dateLabel:'Yesterday',     ref:'NXS-A10278' },
-  { id:'t07', type:'credit', status:'completed', title:'Salary deposit',            subtitle:'Direct credit · USD',     amount:'+$4,500.00', amountRaw:4500,   currency:'USD', date:'2025-04-01', dateLabel:'1 Apr',         ref:'NXS-A10265' },
-  { id:'t08', type:'debit',  status:'failed',    title:'Bill payment – DSTV',       subtitle:'Utility payment',         amount:'-₦15,000',   amountRaw:-15000, currency:'NGN', date:'2025-04-01', dateLabel:'1 Apr',         ref:'NXS-A10264' },
-  // March 2025
-  { id:'t09', type:'debit',  status:'completed', title:'Sent to David M.',          subtitle:'Bank transfer · USD',     amount:'-$320.00',   amountRaw:-320,   currency:'USD', date:'2025-03-28', dateLabel:'28 Mar',        ref:'NXS-A10251' },
-  { id:'t10', type:'swap',   status:'completed', title:'NGN → USD conversion',      subtitle:'FX swap · Rate 0.000618', amount:'-₦250,000',  amountRaw:-250000,currency:'NGN', toCurrency:'USD', date:'2025-03-27', dateLabel:'27 Mar',        ref:'NXS-A10240' },
-  { id:'t11', type:'credit', status:'completed', title:'Payment from Chioma E.',    subtitle:'Wire transfer · NGN',     amount:'+₦180,000',  amountRaw:180000, currency:'NGN', date:'2025-03-25', dateLabel:'25 Mar',        ref:'NXS-A10228' },
-  { id:'t12', type:'debit',  status:'completed', title:'Airtime purchase',          subtitle:'Mobile top-up',           amount:'-₦5,000',    amountRaw:-5000,  currency:'NGN', date:'2025-03-24', dateLabel:'24 Mar',        ref:'NXS-A10215' },
-  { id:'t13', type:'debit',  status:'completed', title:'International transfer',    subtitle:'To Fatima A. · EUR',      amount:'-$1,080.00', amountRaw:-1080,  currency:'USD', date:'2025-03-20', dateLabel:'20 Mar',        ref:'NXS-A10199' },
-  { id:'t14', type:'credit', status:'completed', title:'Freelance payment',         subtitle:'Invoice #3891 · USD',     amount:'+$2,200.00', amountRaw:2200,   currency:'USD', date:'2025-03-15', dateLabel:'15 Mar',        ref:'NXS-A10183' },
-  { id:'t15', type:'swap',   status:'completed', title:'USD → GBP conversion',      subtitle:'FX swap · Rate 0.7912',   amount:'-$1,200.00', amountRaw:-1200,  currency:'USD', toCurrency:'GBP', date:'2025-03-12', dateLabel:'12 Mar',        ref:'NXS-A10170' },
-  { id:'t16', type:'debit',  status:'completed', title:'Rent payment',              subtitle:'Standing order · NGN',    amount:'-₦250,000',  amountRaw:-250000,currency:'NGN', date:'2025-03-03', dateLabel:'3 Mar',         ref:'NXS-A10150' },
-  // February 2025
-  { id:'t17', type:'credit', status:'completed', title:'Salary deposit',            subtitle:'Direct credit · USD',     amount:'+$4,500.00', amountRaw:4500,   currency:'USD', date:'2025-02-28', dateLabel:'28 Feb',        ref:'NXS-A10130' },
-  { id:'t18', type:'debit',  status:'completed', title:'Sent to James O.',          subtitle:'Bank transfer · USD',     amount:'-$750.00',   amountRaw:-750,   currency:'USD', date:'2025-02-20', dateLabel:'20 Feb',        ref:'NXS-A10110' },
-  { id:'t19', type:'swap',   status:'completed', title:'GBP → NGN conversion',      subtitle:'FX swap · Rate 2,044',    amount:'-£200.00',   amountRaw:-200,   currency:'GBP', toCurrency:'NGN', date:'2025-02-14', dateLabel:'14 Feb',        ref:'NXS-A10095' },
-  { id:'t20', type:'credit', status:'completed', title:'Client retainer',           subtitle:'Invoice #3711 · USD',     amount:'+$1,800.00', amountRaw:1800,   currency:'USD', date:'2025-02-05', dateLabel:'5 Feb',         ref:'NXS-A10070' },
-];
+const CURRENCY_SYM: Record<string, string> = {
+  USD:'$', GBP:'£', EUR:'€', CHF:'Fr ', JPY:'¥',
+  CAD:'CA$', AED:'AED ', SGD:'S$', AUD:'A$',
+};
+
+function fmtAmt(currency: string, amount: number): string {
+  const sym = CURRENCY_SYM[currency] ?? (currency + ' ');
+  return sym + Math.abs(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
+
+function txDateLabel(iso: string): string {
+  const d   = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function adaptTx(tx: DBTx): Transaction {
+  const isCredit = tx.type === 'transfer_in' || tx.type === 'deposit';
+  const isSwap   = tx.type === 'swap';
+
+  const displayType: TxType = isCredit ? 'credit' : isSwap ? 'swap' : 'debit';
+  const displayStatus: TxStatus =
+    tx.status === 'completed' ? 'completed' :
+    tx.status === 'pending'   ? 'pending'   : 'failed';
+
+  const currency = isSwap
+    ? (tx.from_currency ?? tx.to_currency ?? 'USD')
+    : isCredit
+    ? (tx.to_currency ?? tx.from_currency ?? 'USD')
+    : (tx.from_currency ?? tx.to_currency ?? 'USD');
+
+  const rawAmount = isSwap
+    ? (tx.from_amount ?? 0)
+    : isCredit
+    ? (tx.to_amount ?? tx.from_amount ?? 0)
+    : (tx.from_amount ?? tx.to_amount ?? 0);
+
+  const title = isSwap
+    ? `${tx.from_currency} → ${tx.to_currency} conversion`
+    : isCredit
+    ? `Received${tx.recipient_name ? ` from ${tx.recipient_name}` : ''}`
+    : tx.recipient_name
+    ? `Sent to ${tx.recipient_name}`
+    : tx.type === 'withdrawal' ? 'Withdrawal' : 'Transfer';
+
+  const subtitle = isSwap
+    ? `FX swap${tx.rate ? ` · Rate ${tx.rate.toFixed(4)}` : ''}`
+    : tx.description ?? (isCredit ? 'Incoming transfer' : 'Outgoing transfer');
+
+  const amountStr = isCredit
+    ? `+${fmtAmt(currency, rawAmount)}`
+    : `-${fmtAmt(currency, rawAmount)}`;
+
+  return {
+    id:        tx.id,
+    type:      displayType,
+    status:    displayStatus,
+    title,
+    subtitle,
+    amount:    amountStr,
+    amountRaw: isCredit ? rawAmount : -rawAmount,
+    currency,
+    toCurrency: isSwap ? (tx.to_currency ?? undefined) : undefined,
+    date:      tx.created_at,
+    dateLabel: txDateLabel(tx.created_at),
+    ref:       tx.reference,
+  };
+}
 
 type FilterType     = 'all' | 'credit' | 'debit' | 'swap';
 type FilterStatus   = 'all' | 'completed' | 'pending' | 'failed';
-type FilterCurrency = 'all' | Currency;
 type SortOrder      = 'newest' | 'oldest' | 'highest' | 'lowest';
 
-const TYPE_LABELS: Record<FilterType, string>         = { all:'All',       credit:'Received', debit:'Sent',      swap:'Converted' };
-const STATUS_LABELS: Record<FilterStatus, string>     = { all:'All',       completed:'Done',  pending:'Pending', failed:'Failed'  };
-const CURRENCY_OPTIONS: FilterCurrency[]              = ['all','USD','NGN','GBP','EUR','CAD','JPY'];
-const SORT_LABELS: Record<SortOrder, string>          = { newest:'Newest first', oldest:'Oldest first', highest:'Highest amount', lowest:'Lowest amount' };
+const TYPE_LABELS: Record<FilterType, string>     = { all:'All', credit:'Received', debit:'Sent', swap:'Converted' };
+const STATUS_LABELS: Record<FilterStatus, string> = { all:'All', completed:'Done', pending:'Pending', failed:'Failed' };
+const SORT_LABELS: Record<SortOrder, string>      = { newest:'Newest first', oldest:'Oldest first', highest:'Highest amount', lowest:'Lowest amount' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -506,24 +553,31 @@ const SortDropdown = ({ value, onChange }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HistoryPage = () => {
-  const [search,          setSearch]          = useState('');
-  const [filterType,      setFilterType]      = useState<FilterType>('all');
-  const [filterStatus,    setFilterStatus]    = useState<FilterStatus>('all');
-  const [filterCurrency,  setFilterCurrency]  = useState<FilterCurrency>('all');
-  const [sortOrder,       setSortOrder]       = useState<SortOrder>('newest');
-  const [selectedTx,      setSelectedTx]      = useState<Transaction | null>(null);
-  const [showFilters,     setShowFilters]     = useState(false);
+  const { transactions: rawTxs, loading } = useTransactions(200);
+  const allTxs = useMemo(() => rawTxs.map(adaptTx), [rawTxs]);
 
-  // Active filter count for badge
+  const [search,         setSearch]        = useState('');
+  const [filterType,     setFilterType]    = useState<FilterType>('all');
+  const [filterStatus,   setFilterStatus]  = useState<FilterStatus>('all');
+  const [filterCurrency, setFilterCurrency]= useState<string>('all');
+  const [sortOrder,      setSortOrder]     = useState<SortOrder>('newest');
+  const [selectedTx,     setSelectedTx]    = useState<Transaction | null>(null);
+  const [showFilters,    setShowFilters]   = useState(false);
+
+  const currencyOptions = useMemo(() => {
+    const s = new Set<string>();
+    allTxs.forEach(tx => { s.add(tx.currency); if (tx.toCurrency) s.add(tx.toCurrency); });
+    return ['all', ...Array.from(s).sort()];
+  }, [allTxs]);
+
   const activeFilterCount = [
     filterType     !== 'all',
     filterStatus   !== 'all',
     filterCurrency !== 'all',
   ].filter(Boolean).length;
 
-  // Filtered + sorted transactions
   const filtered = useMemo(() => {
-    let result = [...TX_DATA];
+    let result = [...allTxs];
 
     // Search
     if (search.trim()) {
@@ -593,10 +647,10 @@ const HistoryPage = () => {
 
       {/* ── Summary stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-8">
-        <StatCard label="Transactions" value={String(TX_DATA.length)} sub="all time"               accent />
-        <StatCard label="Total in"     value="$27.3k" sub="+18% vs last month" up={true}                  />
-        <StatCard label="Total out"    value="$19.1k" sub="-6% vs last month"  up={false}                 />
-        <StatCard label="Conversions"  value="6"       sub="this month"                                    />
+        <StatCard label="Transactions" value={loading ? '…' : String(allTxs.length)}                                          sub="all time"    accent />
+        <StatCard label="Received"     value={loading ? '…' : String(allTxs.filter(t => t.type === 'credit').length)}         sub="incoming"    up />
+        <StatCard label="Sent"         value={loading ? '…' : String(allTxs.filter(t => t.type === 'debit').length)}          sub="outgoing"    up={false} />
+        <StatCard label="Conversions"  value={loading ? '…' : String(allTxs.filter(t => t.type === 'swap').length)}           sub="FX swaps" />
       </div>
 
       {/* ── Search + controls bar ── */}
@@ -721,7 +775,7 @@ const HistoryPage = () => {
               className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden pb-0.5"
               style={{ scrollbarWidth: 'none' }}
             >
-              {CURRENCY_OPTIONS.map(c => (
+              {currencyOptions.map(c => (
                 <FilterPill
                   key={c}
                   label={c === 'all' ? 'All' : c}
@@ -782,24 +836,43 @@ const HistoryPage = () => {
         action={{ text: 'Export CSV' }}
       />
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className={cn(
+          'rounded-2xl border p-12 text-center',
+          'bg-white dark:bg-white/[0.02]',
+          'border-stone-200 dark:border-white/[0.07]'
+        )}>
+          <div className="flex items-center justify-center gap-2 text-stone-400 dark:text-white/30">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Loading transactions…</span>
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className={cn(
           'rounded-2xl border p-12 text-center',
           'bg-white dark:bg-white/[0.02]',
           'border-stone-200 dark:border-white/[0.07]'
         )}>
           <p className="text-[13px] font-semibold text-stone-400 dark:text-white/30 mb-1">
-            No transactions found
+            {allTxs.length === 0 ? 'No transactions yet' : 'No transactions found'}
           </p>
           <p className="text-[11px] text-stone-300 dark:text-white/20 mb-4">
-            Try adjusting your search or filters
+            {allTxs.length === 0
+              ? 'Make your first transfer or currency swap to get started'
+              : 'Try adjusting your search or filters'
+            }
           </p>
-          <button
-            onClick={clearFilters}
-            className="text-[12px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors"
-          >
-            Clear filters
-          </button>
+          {allTxs.length > 0 && (
+            <button
+              onClick={clearFilters}
+              className="text-[12px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-1">

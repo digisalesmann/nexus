@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Eye,
   EyeOff,
@@ -24,6 +24,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { CURRENCY_SYMBOLS } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Transaction } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -62,79 +67,78 @@ interface CardTx {
   icon:     React.ElementType;
 }
 
-const CARDS: Card[] = [
-  {
-    id:         'C001',
-    type:       'physical',
-    network:    'visa',
-    label:      'Primary card',
-    last4:      '4782',
-    fullNumber: '4521 8830 1192 4782',
-    expiry:     '09/27',
-    cvv:        '391',
-    holder:     'VICTOR OKAFOR',
-    currency:   'USD',
-    balance:    14250.60,
-    balanceFmt: '$14,250.60',
-    spent:      3840,
-    limit:      10000,
-    status:     'active',
-    color:      'dark',
-  },
-  {
-    id:         'C002',
-    type:       'virtual',
-    network:    'mastercard',
-    label:      'Virtual card',
-    last4:      '9134',
-    fullNumber: '5412 7563 0021 9134',
-    expiry:     '12/26',
-    cvv:        '847',
-    holder:     'VICTOR OKAFOR',
-    currency:   'USD',
-    balance:    2500.00,
-    balanceFmt: '$2,500.00',
-    spent:      620,
-    limit:      2500,
-    status:     'active',
-    color:      'gold',
-  },
-  {
-    id:         'C003',
-    type:       'physical',
-    network:    'visa',
-    label:      'NGN card',
-    last4:      '3301',
-    fullNumber: '4716 2290 5583 3301',
-    expiry:     '03/26',
-    cvv:        '512',
-    holder:     'VICTOR OKAFOR',
-    currency:   'NGN',
-    balance:    850000,
-    balanceFmt: '₦850,000',
-    spent:      120000,
-    limit:      500000,
-    status:     'frozen',
-    color:      'slate',
-  },
-];
+// CARDS, CARD_TRANSACTIONS, SPENDING_CATS now fetched from Supabase/transactions
 
-const CARD_TRANSACTIONS: CardTx[] = [
-  { id: 't1', merchant: 'Apple Store',       category: 'Shopping',    amount: '-$299.00',  isDebit: true,  date: 'Today',     icon: ShoppingCart },
-  { id: 't2', merchant: 'Starbucks',          category: 'Food & drink',amount: '-$8.50',    isDebit: true,  date: 'Today',     icon: Coffee       },
-  { id: 't3', merchant: 'Top-up',             category: 'Credit',      amount: '+$500.00',  isDebit: false, date: 'Yesterday', icon: ArrowDownLeft},
-  { id: 't4', merchant: 'Netflix',            category: 'Subscriptions',amount: '-$15.99',  isDebit: true,  date: 'Yesterday', icon: Wifi         },
-  { id: 't5', merchant: 'Emirates Airlines',  category: 'Travel',      amount: '-$842.00',  isDebit: true,  date: '2d ago',    icon: Plane        },
-  { id: 't6', merchant: 'Amazon',             category: 'Shopping',    amount: '-$124.50',  isDebit: true,  date: '3d ago',    icon: ShoppingCart },
-];
+interface DBCard {
+  id: string; user_id: string; type: CardType; network: CardNetwork;
+  label: string; last4: string; expiry: string; holder: string;
+  currency: string; balance: number; spent: number; limit_amount: number;
+  status: CardStatus; color: 'dark' | 'gold' | 'slate';
+}
 
-const SPENDING_CATS = [
-  { label: 'Shopping',     pct: 42, color: '#C9A84C' },
-  { label: 'Travel',       pct: 22, color: '#60a5fa' },
-  { label: 'Food',         pct: 18, color: '#34d399' },
-  { label: 'Subscriptions',pct: 10, color: '#a78bfa' },
-  { label: 'Other',        pct: 8,  color: '#94a3b8' },
-];
+function adaptCard(db: DBCard): Card {
+  const sym = CURRENCY_SYMBOLS[db.currency] ?? db.currency;
+  return {
+    id:         db.id,
+    type:       db.type,
+    network:    db.network,
+    label:      db.label,
+    last4:      db.last4,
+    fullNumber: `•••• •••• •••• ${db.last4}`,
+    expiry:     db.expiry,
+    cvv:        '•••',
+    holder:     db.holder,
+    currency:   db.currency,
+    balance:    db.balance,
+    balanceFmt: `${sym}${db.balance.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    spent:      db.spent,
+    limit:      db.limit_amount,
+    status:     db.status,
+    color:      db.color,
+  };
+}
+
+function adaptTxToCardTx(tx: Transaction): CardTx {
+  const isCredit = tx.type === 'transfer_in' || tx.type === 'deposit';
+  const currency = tx.from_currency ?? tx.to_currency ?? 'USD';
+  const amount   = tx.from_amount ?? tx.to_amount ?? 0;
+  const sym      = CURRENCY_SYMBOLS[currency] ?? currency;
+  const elapsed  = Math.round((Date.now() - new Date(tx.created_at).getTime()) / 60000);
+  const date     = elapsed < 1440 ? (elapsed < 60 ? 'Today' : `${Math.round(elapsed / 60)}h ago`) : 'Yesterday';
+  const cat      = tx.type === 'swap' ? 'FX swap'
+    : tx.type === 'transfer_out' ? 'Transfer'
+    : tx.type === 'deposit' ? 'Top-up'
+    : 'Credit';
+  return {
+    id:       tx.id,
+    merchant: tx.recipient_name ?? tx.description ?? cat,
+    category: cat,
+    amount:   `${isCredit ? '+' : '-'}${sym}${Math.abs(amount).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    isDebit:  !isCredit,
+    date,
+    icon:     isCredit ? ArrowDownLeft : tx.type === 'swap' ? RefreshCw : ShoppingCart,
+  };
+}
+
+const SPEND_COLORS_CARD = ['#C9A84C', '#60a5fa', '#34d399', '#a78bfa', '#94a3b8'];
+function buildCardSpendCats(txs: Transaction[]): { label: string; pct: number; color: string }[] {
+  const now   = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const debits = txs.filter(t =>
+    (t.type === 'transfer_out' || t.type === 'withdrawal' || t.type === 'swap') &&
+    new Date(t.created_at) >= start
+  );
+  const totals: Record<string, number> = {};
+  for (const t of debits) {
+    const label = t.type === 'swap' ? 'FX swaps' : t.type === 'withdrawal' ? 'Withdrawals' : 'Transfers';
+    totals[label] = (totals[label] ?? 0) + (t.from_amount ?? 0);
+  }
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0) || 1;
+  return entries.slice(0, 5).map(([label, v], i) => ({
+    label, pct: Math.round((v / total) * 100), color: SPEND_COLORS_CARD[i] ?? '#94a3b8',
+  }));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -521,10 +525,15 @@ const SpendingBar = ({ card }: { card: Card }) => {
 // SPENDING BREAKDOWN DONUT
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SpendingBreakdown = () => {
+const SpendingBreakdown = ({ cats, totalSpent }: {
+  cats: { label: string; pct: number; color: string }[];
+  totalSpent: number;
+}) => {
   const R = 48, cx = 60, cy = 60, stroke = 14;
   const circ = 2 * Math.PI * R;
   let offset = 0;
+
+  const displayCats = cats.length > 0 ? cats : [{ label: 'No data', pct: 100, color: '#e7e5e4' }];
 
   return (
     <div className={cn(
@@ -542,7 +551,7 @@ const SpendingBreakdown = () => {
             className="w-[90px] h-[90px] sm:w-[110px] sm:h-[110px]">
             <circle cx={cx} cy={cy} r={R} fill="none" strokeWidth={stroke}
               className="stroke-stone-100 dark:stroke-white/[0.05]" />
-            {SPENDING_CATS.map((seg, i) => {
+            {displayCats.map((seg, i) => {
               const dash   = (seg.pct / 100) * circ;
               const gap    = circ - dash;
               const rotate = (offset / 100) * 360 - 90;
@@ -559,12 +568,14 @@ const SpendingBreakdown = () => {
               className="fill-stone-400 dark:fill-white/30">This month</text>
             <text x={cx} y={cx + 8} textAnchor="middle" fontSize="13" fontWeight="600"
               className="fill-stone-900 dark:fill-white" fontFamily="'DM Mono', monospace">
-              $3,840
+              ${totalSpent.toLocaleString('en', { maximumFractionDigits: 0 })}
             </text>
           </svg>
         </div>
         <div className="flex flex-col gap-2 flex-1 min-w-0">
-          {SPENDING_CATS.map(s => (
+          {cats.length === 0 ? (
+            <p className="text-[11px] text-stone-400 dark:text-white/25">No spending this month</p>
+          ) : cats.map(s => (
             <div key={s.label} className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
               <span className="text-[11px] flex-1 truncate text-stone-600 dark:text-white/50">
@@ -904,7 +915,7 @@ const AddCardSheet = ({ onClose }: { onClose: () => void }) => {
 const CardTabs = ({ cards, activeId, onSelect }: {
   cards: Card[]; activeId: string; onSelect: (id: string) => void;
 }) => (
-  <div className="flex gap-2.5 overflow-x-auto pb-1
+  <div className="flex gap-2.5 overflow-x-auto py-2 px-1 -mx-1
     [&::-webkit-scrollbar]:hidden"
     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
     {cards.map(c => {
@@ -955,30 +966,45 @@ const CardTabs = ({ cards, activeId, onSelect }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CardsPage = () => {
-  const [cards, setCards]             = useState<Card[]>(CARDS);
-  const [activeId, setActiveId]       = useState(CARDS[0].id);
-  const [revealed, setRevealed]       = useState(false);
-  const [flipped, setFlipped]         = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showAddCard, setShowAddCard] = useState(false);
+  const { user }                               = useAuth();
+  const { transactions, loading: txLoading }   = useTransactions(20);
+  const [cards,         setCards]              = useState<Card[]>([]);
+  const [cardsLoading,  setCardsLoading]       = useState(true);
+  const [activeId,      setActiveId]           = useState<string | null>(null);
+  const [revealed,      setRevealed]           = useState(false);
+  const [flipped,       setFlipped]            = useState(false);
+  const [showSettings,  setShowSettings]       = useState(false);
+  const [showAddCard,   setShowAddCard]        = useState(false);
 
-  const card = cards.find(c => c.id === activeId) ?? cards[0];
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('cards').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const adapted = ((data ?? []) as DBCard[]).map(adaptCard);
+        setCards(adapted);
+        if (adapted.length > 0) setActiveId(adapted[0].id);
+        setCardsLoading(false);
+      });
+  }, [user?.id]);
 
-  const handleSelectCard = (id: string) => {
-    setActiveId(id);
-    setRevealed(false);
-    setFlipped(false);
+  const handleFreeze = async () => {
+    if (!activeId) return;
+    const card = cards.find(c => c.id === activeId);
+    if (!card) return;
+    const newStatus = card.status === 'frozen' ? 'active' : 'frozen';
+    await supabase.from('cards').update({ status: newStatus }).eq('id', activeId);
+    setCards(prev => prev.map(c => c.id === activeId ? { ...c, status: newStatus } : c));
   };
 
-  const handleFreeze = () => {
-    setCards(prev => prev.map(c =>
-      c.id === activeId
-        ? { ...c, status: c.status === 'frozen' ? 'active' : 'frozen' }
-        : c
-    ));
-  };
+  const card         = cards.find(c => c.id === activeId) ?? cards[0];
+  const cardTxs      = useMemo(() => transactions.map(adaptTxToCardTx), [transactions]);
+  const spendCats    = useMemo(() => buildCardSpendCats(transactions), [transactions]);
+  const totalSpent   = useMemo(() => transactions
+    .filter(t => t.type === 'transfer_out' || t.type === 'withdrawal')
+    .reduce((s, t) => s + (t.from_amount ?? 0), 0), [transactions]);
 
-  const totalSpent    = cards.reduce((s, c) => s + c.spent, 0);
+  const handleSelectCard = (id: string) => { setActiveId(id); setRevealed(false); setFlipped(false); };
   const activeCards   = cards.filter(c => c.status === 'active').length;
   const frozenCards   = cards.filter(c => c.status === 'frozen').length;
 
@@ -1000,8 +1026,8 @@ const CardsPage = () => {
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2.5 mb-6 lg:mb-8">
         {[
-          { label: 'Total cards',   value: String(cards.length), sub: `${activeCards} active` },
-          { label: 'Frozen',        value: String(frozenCards),  sub: 'tap to unfreeze'       },
+          { label: 'Total cards',   value: cardsLoading ? '—' : String(cards.length), sub: `${activeCards} active` },
+          { label: 'Frozen',        value: cardsLoading ? '—' : String(frozenCards),  sub: 'tap to unfreeze'       },
           { label: 'Monthly spend', value: `$${(totalSpent / 1000).toFixed(1)}k`, sub: 'this month', accent: true },
         ].map(s => (
           <div key={s.label} className={cn(
@@ -1045,24 +1071,46 @@ const CardsPage = () => {
                 Add card
               </button>
             </div>
-            <CardTabs cards={cards} activeId={activeId} onSelect={handleSelectCard} />
+            {cardsLoading ? (
+              <div className="flex gap-2.5 overflow-x-auto py-2 px-1">
+                {[1,2].map(i => (
+                  <div key={i} className="w-[130px] sm:w-[150px] h-[80px] rounded-xl
+                    bg-stone-100 dark:bg-white/[0.06] animate-pulse shrink-0" />
+                ))}
+              </div>
+            ) : cards.length === 0 ? (
+              <div className="rounded-2xl border p-8 text-center
+                bg-white dark:bg-white/[0.02] border-stone-200 dark:border-white/[0.07]">
+                <p className="text-[13px] text-stone-400 dark:text-white/30 mb-2">No cards yet</p>
+                <button onClick={() => setShowAddCard(true)}
+                  className="text-[12px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
+                  Add your first card →
+                </button>
+              </div>
+            ) : (
+              <CardTabs cards={cards} activeId={activeId ?? cards[0].id} onSelect={handleSelectCard} />
+            )}
           </div>
 
           {/* Active card face */}
-          <div className="max-w-[420px]">
-            <CardFace card={card} revealed={revealed} flipped={flipped} />
-          </div>
+          {card && (
+            <div className="max-w-[420px]">
+              <CardFace card={card} revealed={revealed} flipped={flipped} />
+            </div>
+          )}
 
           {/* Card controls */}
-          <CardControls
-            card={card}
-            revealed={revealed}
-            flipped={flipped}
-            onReveal={() => setRevealed(r => !r)}
-            onFlip={() => setFlipped(f => !f)}
-            onFreeze={handleFreeze}
-            onSettings={() => setShowSettings(true)}
-          />
+          {card && (
+            <CardControls
+              card={card}
+              revealed={revealed}
+              flipped={flipped}
+              onReveal={() => setRevealed(r => !r)}
+              onFlip={() => setFlipped(f => !f)}
+              onFreeze={handleFreeze}
+              onSettings={() => setShowSettings(true)}
+            />
+          )}
 
           {/* Card number detail (when revealed) */}
           {revealed && !flipped && (
@@ -1100,18 +1148,33 @@ const CardsPage = () => {
           )}
 
           {/* Spending limit bar */}
-          <SpendingBar card={card} />
+          {card && <SpendingBar card={card} />}
 
           {/* Card transactions */}
           <div>
-            <SectionRule label={`Recent transactions · ${card.label}`} action={{ text: 'View all' }} />
+            <SectionRule label={card ? `Recent transactions · ${card.label}` : 'Recent transactions'} action={{ text: 'View all' }} />
             <div className={cn(
               'rounded-2xl border overflow-hidden',
               'bg-white dark:bg-white/[0.02]',
               'border-stone-200 dark:border-white/[0.07]'
             )}>
               <div className="px-3 sm:px-4 py-1">
-                {CARD_TRANSACTIONS.map(tx => (
+                {txLoading ? (
+                  [1,2,3].map(i => (
+                    <div key={i} className="flex items-center gap-3 py-3 border-b border-stone-100 dark:border-white/[0.04] last:border-0">
+                      <div className="w-9 h-9 rounded-xl bg-stone-100 dark:bg-white/[0.06] animate-pulse shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="h-3 w-32 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                        <div className="h-2.5 w-20 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                      </div>
+                      <div className="h-3 w-16 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                    </div>
+                  ))
+                ) : cardTxs.length === 0 ? (
+                  <p className="text-center py-8 text-[12px] text-stone-400 dark:text-white/25">
+                    No transactions yet
+                  </p>
+                ) : cardTxs.slice(0, 6).map(tx => (
                   <CardTxRow key={tx.id} tx={tx} />
                 ))}
               </div>
@@ -1125,7 +1188,7 @@ const CardsPage = () => {
           {/* Spending breakdown */}
           <div>
             <SectionRule label="Spending breakdown" />
-            <SpendingBreakdown />
+            <SpendingBreakdown cats={spendCats} totalSpent={totalSpent} />
           </div>
 
           {/* Security info */}
@@ -1222,7 +1285,7 @@ const CardsPage = () => {
       <div className="h-24 lg:h-12" />
 
       {/* Sheets */}
-      {showSettings && (
+      {showSettings && card && (
         <CardSettingsSheet
           card={card}
           onClose={() => setShowSettings(false)}

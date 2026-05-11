@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -13,75 +13,163 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Transaction } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATA
+// TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Period = '3M' | '6M' | '1Y' | 'YTD';
 
-const MONTHS_12 = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
-
-const MONTHLY_DATA: Record<string, { income: number; expense: number; fx: number }> = {
-  Apr: { income: 7200,  expense: 4100, fx: 500  },
-  May: { income: 6800,  expense: 3900, fx: 1200 },
-  Jun: { income: 8400,  expense: 4600, fx: 800  },
-  Jul: { income: 7100,  expense: 5200, fx: 300  },
-  Aug: { income: 9200,  expense: 4800, fx: 1500 },
-  Sep: { income: 8800,  expense: 5100, fx: 700  },
-  Oct: { income: 7600,  expense: 4400, fx: 900  },
-  Nov: { income: 10200, expense: 5800, fx: 2100 },
-  Dec: { income: 11400, expense: 7200, fx: 1800 },
-  Jan: { income: 8900,  expense: 5600, fx: 600  },
-  Feb: { income: 9600,  expense: 5200, fx: 1100 },
-  Mar: { income: 10800, expense: 6100, fx: 1400 },
-};
-
-const CATEGORIES = [
-  { label: 'Housing',       value: 1850, color: '#C9A84C', pct: 30 },
-  { label: 'Transfers',     value: 1200, color: '#60a5fa', pct: 20 },
-  { label: 'Food & dining', value: 980,  color: '#34d399', pct: 16 },
-  { label: 'Shopping',      value: 760,  color: '#a78bfa', pct: 12 },
-  { label: 'Travel',        value: 680,  color: '#f97316', pct: 11 },
-  { label: 'Subscriptions', value: 420,  color: '#ec4899', pct: 7  },
-  { label: 'Other',         value: 250,  color: '#94a3b8', pct: 4  },
-];
-
-const INCOME_SOURCES = [
-  { label: 'Salary',          value: 4500,  color: '#C9A84C', pct: 47 },
-  { label: 'Freelance',       value: 2800,  color: '#34d399', pct: 29 },
-  { label: 'Client invoices', value: 1800,  color: '#60a5fa', pct: 19 },
-  { label: 'Other',           value: 500,   color: '#94a3b8', pct: 5  },
-];
-
-const CURRENCY_BREAKDOWN = [
-  { currency: 'USD', inflow: 8400,  outflow: 4200, net: 4200,  flag: 'USD' },
-  { currency: 'NGN', inflow: 1200,  outflow: 960,  net: 240,   flag: 'NGN' },
-  { currency: 'GBP', inflow: 3800,  outflow: 1800, net: 2000,  flag: 'GBP' },
-  { currency: 'EUR', inflow: 0,     outflow: 220,  net: -220,  flag: 'EUR' },
-];
-
-const RECENT_REPORTS = [
-  { id: 'R001', title: 'Q1 2025 Statement',      date: 'Apr 1, 2025',  type: 'statement', size: '284 KB' },
-  { id: 'R002', title: 'February 2025 Summary',  date: 'Mar 1, 2025',  type: 'summary',   size: '128 KB' },
-  { id: 'R003', title: 'January 2025 Summary',   date: 'Feb 1, 2025',  type: 'summary',   size: '112 KB' },
-  { id: 'R004', title: 'Q4 2024 Statement',      date: 'Jan 1, 2025',  type: 'statement', size: '306 KB' },
-  { id: 'R005', title: 'Annual Report 2024',     date: 'Jan 1, 2025',  type: 'annual',    size: '1.2 MB' },
-];
-
-const PERIOD_MONTHS: Record<Period, number> = { '3M': 3, '6M': 6, '1Y': 12, 'YTD': 9 };
+interface MonthEntry  { key: string; label: string; }
+interface MonthData   { income: number; expense: number; fx: number; }
+interface DonutItem   { label: string; value: number; color: string; pct: number; }
+interface CurrencyRow { currency: string; inflow: number; outflow: number; net: number; flag: string; }
+interface ReportEntry { id: string; title: string; date: string; type: string; size: string; }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
+// DATA BUILDERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getMonthsForPeriod(period: Period): string[] {
-  const n = PERIOD_MONTHS[period];
-  return MONTHS_12.slice(-n);
+const CATEGORY_COLORS = ['#C9A84C', '#60a5fa', '#34d399', '#a78bfa', '#f97316', '#ec4899', '#94a3b8'];
+const INCOME_COLORS   = ['#C9A84C', '#34d399', '#60a5fa', '#a78bfa', '#94a3b8'];
+
+function toMonthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function sumFor(key: 'income' | 'expense' | 'fx', months: string[]): number {
-  return months.reduce((s, m) => s + (MONTHLY_DATA[m]?.[key] ?? 0), 0);
+function buildMonthEntries(period: Period, offsetMonths = 0): MonthEntry[] {
+  const now   = new Date();
+  const count = period === 'YTD'
+    ? now.getMonth() + 1
+    : ({ '3M': 3, '6M': 6, '1Y': 12 } as Record<string, number>)[period];
+  const entries: MonthEntry[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d   = new Date(now.getFullYear(), now.getMonth() - i - offsetMonths, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    entries.push({ key, label: d.toLocaleString('en', { month: 'short' }) });
+  }
+  return entries;
+}
+
+function buildMonthlyData(txs: Transaction[]): Map<string, MonthData> {
+  const map = new Map<string, MonthData>();
+  for (const tx of txs) {
+    const key   = toMonthKey(tx.created_at);
+    const entry = map.get(key) ?? { income: 0, expense: 0, fx: 0 };
+    const amt   = tx.from_amount ?? 0;
+    if (tx.type === 'deposit' || tx.type === 'transfer_in') {
+      entry.income += tx.to_amount ?? amt;
+    } else if (tx.type === 'withdrawal' || tx.type === 'transfer_out') {
+      entry.expense += amt;
+    } else if (tx.type === 'swap') {
+      entry.fx      += amt;
+      entry.expense += amt;
+    }
+    map.set(key, entry);
+  }
+  return map;
+}
+
+function sumMonths(entries: MonthEntry[], map: Map<string, MonthData>, key: keyof MonthData): number {
+  return entries.reduce((s, m) => s + (map.get(m.key)?.[key] ?? 0), 0);
+}
+
+function buildCategories(txs: Transaction[], monthKeys: Set<string>): DonutItem[] {
+  const LABEL: Record<string, string> = { transfer_out: 'Transfers', withdrawal: 'Withdrawals', swap: 'FX Swaps' };
+  const totals: Record<string, number> = {};
+  for (const tx of txs) {
+    const label = LABEL[tx.type];
+    if (!label || !monthKeys.has(toMonthKey(tx.created_at))) continue;
+    totals[label] = (totals[label] ?? 0) + (tx.from_amount ?? 0);
+  }
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0) || 1;
+  return entries.map(([label, value], i) => ({
+    label, value: Math.round(value),
+    color: CATEGORY_COLORS[i] ?? '#94a3b8',
+    pct: Math.round((value / total) * 100),
+  }));
+}
+
+function buildIncomeSources(txs: Transaction[], monthKeys: Set<string>): DonutItem[] {
+  const LABEL: Record<string, string> = { deposit: 'Deposits', transfer_in: 'Inbound Transfers' };
+  const totals: Record<string, number> = {};
+  for (const tx of txs) {
+    const label = LABEL[tx.type];
+    if (!label || !monthKeys.has(toMonthKey(tx.created_at))) continue;
+    totals[label] = (totals[label] ?? 0) + (tx.to_amount ?? tx.from_amount ?? 0);
+  }
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0) || 1;
+  return entries.map(([label, value], i) => ({
+    label, value: Math.round(value),
+    color: INCOME_COLORS[i] ?? '#94a3b8',
+    pct: Math.round((value / total) * 100),
+  }));
+}
+
+function buildCurrencyBreakdown(txs: Transaction[], monthKeys: Set<string>): CurrencyRow[] {
+  const map: Record<string, { inflow: number; outflow: number }> = {};
+  const g = (cur: string) => { map[cur] = map[cur] ?? { inflow: 0, outflow: 0 }; return map[cur]; };
+  for (const tx of txs) {
+    if (!monthKeys.has(toMonthKey(tx.created_at))) continue;
+    if (tx.type === 'deposit' || tx.type === 'transfer_in') {
+      g(tx.to_currency ?? tx.from_currency ?? 'USD').inflow += tx.to_amount ?? tx.from_amount ?? 0;
+    } else if (tx.type === 'withdrawal' || tx.type === 'transfer_out') {
+      g(tx.from_currency ?? 'USD').outflow += tx.from_amount ?? 0;
+    } else if (tx.type === 'swap') {
+      g(tx.from_currency ?? 'USD').outflow += tx.from_amount ?? 0;
+      g(tx.to_currency   ?? 'USD').inflow  += tx.to_amount   ?? 0;
+    }
+  }
+  return Object.entries(map)
+    .map(([currency, { inflow, outflow }]) => ({
+      currency,
+      inflow:  Math.round(inflow),
+      outflow: Math.round(outflow),
+      net:     Math.round(inflow - outflow),
+      flag:    currency,
+    }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+}
+
+function buildRecentReports(): ReportEntry[] {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth();
+  const fmt   = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const out: ReportEntry[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(year, month - i, 1);
+    out.push({
+      id:    `S${i}`,
+      title: `${d.toLocaleString('en-US', { month: 'long', year: 'numeric' })} Summary`,
+      date:  fmt(new Date(d.getFullYear(), d.getMonth() + 1, 1)),
+      type:  'summary',
+      size:  `${100 + i * 14} KB`,
+    });
+  }
+  const q      = Math.floor(month / 3);
+  const prevQ  = q === 0 ? 3 : q - 1;
+  const qYear  = q === 0 ? year - 1 : year;
+  out.push({
+    id:    'Q1',
+    title: `Q${prevQ + 1} ${qYear} Statement`,
+    date:  fmt(new Date(qYear, prevQ * 3 + 3, 1)),
+    type:  'statement',
+    size:  '284 KB',
+  });
+  out.push({
+    id:    'A1',
+    title: `Annual Report ${year - 1}`,
+    date:  fmt(new Date(year, 0, 1)),
+    type:  'annual',
+    size:  '1.2 MB',
+  });
+  return out;
 }
 
 function fmtK(n: number): string {
@@ -532,8 +620,8 @@ const DonutChart = ({
 // CURRENCY BREAKDOWN TABLE
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CurrencyTable = () => {
-  const SYM: Record<string, string> = { USD: '$', NGN: '₦', GBP: '£', EUR: '€' };
+const CurrencyTable = ({ rows }: { rows: CurrencyRow[] }) => {
+  const SYM: Record<string, string> = { USD: '$', NGN: '₦', GBP: '£', EUR: '€', CAD: 'C$', AUD: 'A$', CHF: 'Fr', JPY: '¥' };
 
   return (
     <div className={cn(
@@ -562,7 +650,11 @@ const CurrencyTable = () => {
 
       {/* Rows */}
       <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
-        {CURRENCY_BREAKDOWN.map(row => {
+        {rows.length === 0 ? (
+          <p className="px-5 py-6 text-[12px] text-stone-400 dark:text-white/25 text-center font-mono">
+            No currency data for this period
+          </p>
+        ) : rows.map(row => {
           const sym  = SYM[row.currency] ?? '';
           const isUp = row.net >= 0;
           return (
@@ -657,7 +749,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   annual:    { label: 'Annual',    color: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10' },
 };
 
-const ReportRow = ({ r }: { r: typeof RECENT_REPORTS[0] }) => {
+const ReportRow = ({ r }: { r: ReportEntry }) => {
   const cfg = TYPE_CONFIG[r.type] ?? TYPE_CONFIG.summary;
   return (
     <div className="flex items-center gap-3 py-3.5
@@ -803,22 +895,54 @@ const ExportDropdown = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ReportsPage = () => {
-  const [period, setPeriod] = useState<Period>('6M');
+  const [period, setPeriod]     = useState<Period>('6M');
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
 
-  const months  = getMonthsForPeriod(period);
-  const income  = sumFor('income',  months);
-  const expense = sumFor('expense', months);
-  const fx      = sumFor('fx',      months);
+  const { transactions } = useTransactions(500);
+
+  // Current period month entries
+  const monthEntries = useMemo(() => buildMonthEntries(period), [period]);
+  const monthKeys    = useMemo(() => new Set(monthEntries.map(m => m.key)), [monthEntries]);
+  const chartLabels  = useMemo(() => monthEntries.map(m => m.label), [monthEntries]);
+
+  // All-transactions monthly aggregates
+  const allMonthlyData = useMemo(() => buildMonthlyData(transactions), [transactions]);
+
+  // Build Record<label, data> for charts (BarChart/LineChart expect label-keyed record)
+  const chartData = useMemo(() => {
+    const rec: Record<string, { income: number; expense: number; fx: number }> = {};
+    for (const m of monthEntries) rec[m.label] = allMonthlyData.get(m.key) ?? { income: 0, expense: 0, fx: 0 };
+    return rec;
+  }, [monthEntries, allMonthlyData]);
+
+  const income  = useMemo(() => sumMonths(monthEntries, allMonthlyData, 'income'),  [monthEntries, allMonthlyData]);
+  const expense = useMemo(() => sumMonths(monthEntries, allMonthlyData, 'expense'), [monthEntries, allMonthlyData]);
+  const fx      = useMemo(() => sumMonths(monthEntries, allMonthlyData, 'fx'),      [monthEntries, allMonthlyData]);
   const net     = income - expense;
   const savings = income > 0 ? Math.round((net / income) * 100) : 0;
 
-  // Month-over-month change vs previous period
-  const prevMonths  = getMonthsForPeriod(period === '3M' ? '3M' : period === '6M' ? '3M' : '6M');
-  const prevIncome  = sumFor('income',  prevMonths);
-  const prevExpense = sumFor('expense', prevMonths);
-  const incomeChg   = prevIncome  > 0 ? ((income  - prevIncome)  / prevIncome)  * 100 : 0;
-  const expenseChg  = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : 0;
+  // Previous same-length period for comparison
+  const periodCount     = period === 'YTD' ? new Date().getMonth() + 1 : ({ '3M': 3, '6M': 6, '1Y': 12 } as Record<string, number>)[period];
+  const prevMonthEntries = useMemo(() => buildMonthEntries(period, periodCount), [period, periodCount]);
+  const prevIncome      = useMemo(() => sumMonths(prevMonthEntries, allMonthlyData, 'income'),  [prevMonthEntries, allMonthlyData]);
+  const prevExpense     = useMemo(() => sumMonths(prevMonthEntries, allMonthlyData, 'expense'), [prevMonthEntries, allMonthlyData]);
+  const incomeChg  = prevIncome  > 0 ? ((income  - prevIncome)  / prevIncome)  * 100 : 0;
+  const expenseChg = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : 0;
+
+  // Derived breakdowns
+  const categories    = useMemo(() => buildCategories(transactions, monthKeys),        [transactions, monthKeys]);
+  const incomeSources = useMemo(() => buildIncomeSources(transactions, monthKeys),     [transactions, monthKeys]);
+  const currencyRows  = useMemo(() => buildCurrencyBreakdown(transactions, monthKeys), [transactions, monthKeys]);
+  const recentReports = useMemo(() => buildRecentReports(), []);
+
+  // FX conversion stats
+  const fxTxs  = useMemo(() => transactions.filter(tx => tx.type === 'swap' && monthKeys.has(toMonthKey(tx.created_at))), [transactions, monthKeys]);
+  const fxFees = useMemo(() => fxTxs.reduce((s, tx) => s + tx.fee, 0), [fxTxs]);
+  const bestRate = useMemo(() => {
+    const usdToGbp = fxTxs.filter(tx => tx.from_currency === 'USD' && tx.to_currency === 'GBP' && (tx.rate ?? 0) > 0);
+    if (!usdToGbp.length) return null;
+    return Math.max(...usdToGbp.map(tx => tx.rate ?? 0)).toFixed(4) + ' GBP';
+  }, [fxTxs]);
 
   return (
     <div className="w-full">
@@ -921,8 +1045,8 @@ const ReportsPage = () => {
         </div>
 
         {chartType === 'bar'
-          ? <BarChart months={months} data={MONTHLY_DATA} />
-          : <LineChart months={months} data={MONTHLY_DATA} />
+          ? <BarChart months={chartLabels} data={chartData} />
+          : <LineChart months={chartLabels} data={chartData} />
         }
       </div>
 
@@ -956,19 +1080,19 @@ const ReportsPage = () => {
             {net >= 0 ? '↑ Surplus' : '↓ Deficit'}
           </span>
         </div>
-        <LineChart months={months} data={MONTHLY_DATA} />
+        <LineChart months={chartLabels} data={chartData} />
       </div>
 
       {/* ── Spending + Income breakdowns side by side ── */}
       <SectionRule label="Breakdown" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
         <DonutChart
-          items={CATEGORIES}
+          items={categories.length > 0 ? categories : [{ label: 'No data', value: 0, color: '#94a3b8', pct: 100 }]}
           title="Expense categories"
           total={fmtK(expense)}
         />
         <DonutChart
-          items={INCOME_SOURCES}
+          items={incomeSources.length > 0 ? incomeSources : [{ label: 'No data', value: 0, color: '#94a3b8', pct: 100 }]}
           title="Income sources"
           total={fmtK(income)}
         />
@@ -977,7 +1101,7 @@ const ReportsPage = () => {
       {/* ── Currency breakdown ── */}
       <SectionRule label="Currency breakdown" />
       <div className="mb-8">
-        <CurrencyTable />
+        <CurrencyTable rows={currencyRows} />
       </div>
 
       {/* ── FX conversion summary ── */}
@@ -989,10 +1113,10 @@ const ReportsPage = () => {
       )}>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: 'Total converted',  value: fmtFull(fx),        sub: `${months.length} months`              },
-            { label: 'Conversions',      value: '14',               sub: 'transactions'                         },
-            { label: 'Fees paid',        value: fmtFull(fx * 0.005),sub: 'at 0.5% avg'                          },
-            { label: 'Best rate',        value: '1,620 NGN',        sub: 'per USD'                              },
+            { label: 'Total converted', value: fmtFull(fx),                  sub: `${monthEntries.length} months`   },
+            { label: 'Conversions',     value: String(fxTxs.length),          sub: 'transactions'                    },
+            { label: 'Fees paid',       value: fmtFull(fxFees),               sub: 'actual fees'                     },
+            { label: 'Best rate',       value: bestRate ?? '—',               sub: 'USD→GBP'                         },
           ].map(s => (
             <div key={s.label}>
               <p className="text-[9px] font-bold tracking-[0.15em] uppercase mb-1.5
@@ -1029,32 +1153,32 @@ const ReportsPage = () => {
         </div>
 
         <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
-          {months.map(m => {
-            const d   = MONTHLY_DATA[m];
-            const net = d.income - d.expense;
+          {monthEntries.map(({ key, label }) => {
+            const d      = chartData[label] ?? { income: 0, expense: 0, fx: 0 };
+            const rowNet = d.income - d.expense;
             return (
-              <div key={m}
+              <div key={key}
                 className="px-4 sm:px-5 py-3.5 hover:bg-stone-50 dark:hover:bg-white/[0.02] transition-colors">
 
                 {/* Mobile: 2-col */}
                 <div className="sm:hidden flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[13px] font-bold text-stone-800 dark:text-white/80">{m}</p>
+                    <p className="text-[13px] font-bold text-stone-800 dark:text-white/80">{label}</p>
                     <p className="text-[10px] font-mono text-stone-400 dark:text-white/25 mt-0.5">
                       {fmtK(d.income)} in · {fmtK(d.expense)} out
                     </p>
                   </div>
                   <p className={cn(
                     'text-[13px] font-bold font-mono tabular-nums',
-                    net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400'
+                    rowNet >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400'
                   )}>
-                    {net >= 0 ? '+' : ''}{fmtK(net)}
+                    {rowNet >= 0 ? '+' : ''}{fmtK(rowNet)}
                   </p>
                 </div>
 
                 {/* Desktop: 5-col grid */}
                 <div className="hidden sm:grid sm:grid-cols-5 items-center">
-                  <span className="text-[13px] font-bold text-stone-800 dark:text-white/80">{m}</span>
+                  <span className="text-[13px] font-bold text-stone-800 dark:text-white/80">{label}</span>
                   <span className="text-[12px] font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">
                     +{fmtK(d.income)}
                   </span>
@@ -1066,9 +1190,9 @@ const ReportsPage = () => {
                   </span>
                   <span className={cn(
                     'text-[12px] font-bold font-mono tabular-nums',
-                    net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400'
+                    rowNet >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-400'
                   )}>
-                    {net >= 0 ? '+' : ''}{fmtK(net)}
+                    {rowNet >= 0 ? '+' : ''}{fmtK(rowNet)}
                   </span>
                 </div>
               </div>
@@ -1126,7 +1250,7 @@ const ReportsPage = () => {
         'border-stone-200 dark:border-white/[0.07]'
       )}>
         <div className="px-3 sm:px-4 py-1.5">
-          {RECENT_REPORTS.map(r => (
+          {recentReports.map(r => (
             <ReportRow key={r.id} r={r} />
           ))}
         </div>

@@ -4,9 +4,10 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -52,7 +53,16 @@ const LogoMark = () => (
 
 export const Sidebar = () => {
   const location  = useLocation();
+  const navigate  = useNavigate();
   const [showMore, setShowMore] = useState(false);
+  const { profile, signOut }   = useAuth();
+  const displayName = profile?.full_name ?? 'Account';
+  const initial     = displayName[0]?.toUpperCase() ?? '?';
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <>
@@ -137,7 +147,9 @@ export const Sidebar = () => {
             <Settings size={14} className="opacity-40 shrink-0" />
             Settings
           </Link>
-          <button className={cn(
+          <button
+            onClick={handleSignOut}
+            className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors',
             'text-red-400/60 dark:text-red-400/40',
             'hover:text-red-500 dark:hover:text-red-400',
@@ -151,12 +163,12 @@ export const Sidebar = () => {
           <div className="flex items-center gap-3 px-3 pt-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#8B6F2E]
               flex items-center justify-center text-[#0C0C0D] text-[11px] font-bold shrink-0">
-              V
+              {initial}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12.5px] font-semibold text-stone-900 dark:text-white
                 leading-none tracking-[-0.2px]">
-                Victor
+                {displayName.split(' ')[0]}
               </p>
               <p className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-[0.15em] mt-0.5">
                 Premium
@@ -355,7 +367,9 @@ export const Sidebar = () => {
                   <Settings size={14} className="shrink-0 opacity-60" />
                   Settings
                 </Link>
-                <button className={cn(
+                <button
+                  onClick={handleSignOut}
+                  className={cn(
                   'flex-1 flex items-center justify-center gap-2.5 py-3 rounded-xl border text-[13px] font-semibold transition-colors',
                   'bg-red-50 dark:bg-red-500/[0.07]',
                   'border-red-100 dark:border-red-500/[0.15]',

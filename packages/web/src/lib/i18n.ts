@@ -2,7 +2,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 const translations = {
   en: {
-    hello: 'Hello, Victor',
+    hello: 'Hello, Alex',
     welcome: 'Welcome back to your dashboard',
     dashboard: 'Dashboard',
     deposit: 'Deposit',
@@ -36,7 +36,7 @@ const translations = {
     // ...add more as needed
   },
   es: {
-    hello: 'Hola, Victor',
+    hello: 'Hola, Alex',
     welcome: 'Bienvenido de nuevo a tu panel',
     dashboard: 'Tablero',
     deposit: 'Depositar',
@@ -70,7 +70,7 @@ const translations = {
     // ...add more as needed
   },
   fr: {
-    hello: 'Bonjour, Victor',
+    hello: 'Bonjour, Alex',
     welcome: 'Bon retour sur votre tableau de bord',
     dashboard: 'Tableau de bord',
     deposit: 'Dépôt',

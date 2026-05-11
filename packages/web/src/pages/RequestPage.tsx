@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Search,
   X,
@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFlag } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { useWallets } from '../hooks/useWallets';
+import { supabase } from '../lib/supabase';
+import { CURRENCY_SYMBOLS } from '../lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -32,12 +36,8 @@ interface Account {
   accountNum: string;
 }
 
-const ACCOUNTS: Account[] = [
-  { code:'USD', name:'US Dollar',      symbol:'$',  balance:14250.60, balanceFmt:'$14,250.60', accountNum:'4521 8830 1192 0047' },
-  { code:'GBP', name:'British Pound',  symbol:'£',  balance:2100.00,  balanceFmt:'£2,100.00',  accountNum:'3309 5512 8820 1134' },
-  { code:'EUR', name:'Euro',           symbol:'€',  balance:3800.00,  balanceFmt:'€3,800.00',  accountNum:'7712 0044 3391 6680' },
-  { code:'NGN', name:'Nigerian Naira', symbol:'₦', balance:850000,   balanceFmt:'₦850,000',   accountNum:'0123 4567 8901'      },
-];
+// ACCOUNTS are now derived from useWallets() inside the component.
+// Keeping the Account interface as-is.
 
 interface Contact {
   id:       string;
@@ -48,16 +48,6 @@ interface Contact {
   country:  string;
   favourite:boolean;
 }
-
-const CONTACTS: Contact[] = [
-  { id:'c01', name:'Sophie Müller',    initials:'SM', color:'from-sky-500 to-blue-600',       email:'sophie@example.com',   country:'Germany',        favourite:true  },
-  { id:'c02', name:'Amina Bello',      initials:'AB', color:'from-violet-500 to-purple-600',  email:'amina@example.com',    country:'United Kingdom',  favourite:true  },
-  { id:'c03', name:'Marcus Chen',      initials:'MC', color:'from-emerald-500 to-teal-600',   email:'marcus@example.com',   country:'United States',   favourite:true  },
-  { id:'c04', name:'Yuki Tanaka',      initials:'YT', color:'from-rose-500 to-pink-600',      email:'yuki@example.com',     country:'Japan',           favourite:false },
-  { id:'c05', name:'Fatima Al-Rashid', initials:'FA', color:'from-amber-500 to-orange-600',   email:'fatima@example.com',   country:'UAE',             favourite:false },
-  { id:'c06', name:'TechCorp Ltd.',    initials:'TC', color:'from-slate-500 to-slate-700',    email:'billing@techcorp.com', country:'United States',   favourite:true  },
-  { id:'c07', name:'Léa Dubois',       initials:'LD', color:'from-fuchsia-500 to-pink-600',   email:'lea@example.com',      country:'France',          favourite:false },
-];
 
 type RequestStatus = 'pending' | 'paid' | 'expired' | 'cancelled';
 
@@ -74,14 +64,72 @@ interface PaymentRequest {
   expires:   string;
 }
 
-const PAST_REQUESTS: PaymentRequest[] = [
-  { id:'req01', from:'Marcus Chen',   initials:'MC', color:'from-emerald-500 to-teal-600',  amount:'$2,500.00', currency:'USD', note:'Q1 invoice #4421',       status:'paid',      created:'2d ago',   expires:'—'       },
-  { id:'req02', from:'Amina Bello',   initials:'AB', color:'from-violet-500 to-purple-600', amount:'£850.00',   currency:'GBP', note:'Design work March',      status:'pending',   created:'5h ago',   expires:'6d'      },
-  { id:'req03', from:'Sophie Müller', initials:'SM', color:'from-sky-500 to-blue-600',      amount:'€380.00',   currency:'EUR', note:'Dinner split',           status:'pending',   created:'1d ago',   expires:'7d'      },
-  { id:'req04', from:'TechCorp Ltd.', initials:'TC', color:'from-slate-500 to-slate-700',   amount:'$4,500.00', currency:'USD', note:'Monthly retainer Apr',   status:'paid',      created:'1w ago',   expires:'—'       },
-  { id:'req05', from:'Yuki Tanaka',   initials:'YT', color:'from-rose-500 to-pink-600',     amount:'$320.00',   currency:'USD', note:'Consultation fee',       status:'expired',   created:'2w ago',   expires:'—'       },
-  { id:'req06', from:'Léa Dubois',    initials:'LD', color:'from-fuchsia-500 to-pink-600',  amount:'€640.00',   currency:'EUR', note:'Event photography',      status:'cancelled', created:'3w ago',   expires:'—'       },
+// DB row shapes
+interface DBBeneficiary {
+  id: string; user_id: string; name: string; bank_name: string | null;
+  account_number: string | null; iban: string | null; sort_code: string | null;
+  currency: string; country: string | null; created_at: string;
+}
+interface DBPaymentRequest {
+  id: string; user_id: string; contact_name: string | null; amount: number | null;
+  currency: string; note: string | null; status: RequestStatus;
+  created_at: string; expires_at: string | null;
+}
+
+const CONTACT_COLORS = [
+  'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600', 'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600', 'from-fuchsia-500 to-pink-600',
+  'from-slate-500 to-slate-700',
 ];
+function contactInitials(name: string) {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+function contactColor(id: string) {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return CONTACT_COLORS[h % CONTACT_COLORS.length];
+}
+function adaptBeneficiaryToContact(db: DBBeneficiary): Contact {
+  return {
+    id:        db.id,
+    name:      db.name,
+    initials:  contactInitials(db.name),
+    color:     contactColor(db.id),
+    email:     db.account_number ?? db.iban ?? db.bank_name ?? '—',
+    country:   db.country ?? '—',
+    favourite: false,
+  };
+}
+function adaptDBRequest(db: DBPaymentRequest, sym: string): PaymentRequest {
+  const elapsed = Math.round((Date.now() - new Date(db.created_at).getTime()) / 60000);
+  const created = elapsed < 60 ? `${elapsed}m ago` : elapsed < 1440
+    ? `${Math.round(elapsed / 60)}h ago` : `${Math.round(elapsed / 1440)}d ago`;
+  const expires = db.expires_at
+    ? `${Math.max(0, Math.round((new Date(db.expires_at).getTime() - Date.now()) / 86400000))}d`
+    : '—';
+  const amt = db.amount != null
+    ? `${sym}${db.amount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : 'Open';
+  return {
+    id:       db.id,
+    from:     db.contact_name ?? 'Anyone',
+    initials: contactInitials(db.contact_name ?? 'A'),
+    color:    contactColor(db.id),
+    amount:   amt,
+    currency: db.currency,
+    note:     db.note ?? '',
+    status:   db.status,
+    created,
+    expires,
+  };
+}
+
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'US Dollar', GBP: 'British Pound', EUR: 'Euro',
+  CAD: 'Canadian Dollar', JPY: 'Japanese Yen', CHF: 'Swiss Franc',
+  AUD: 'Australian Dollar', NGN: 'Nigerian Naira',
+};
 
 const QUICK_AMOUNTS = [50, 100, 250, 500, 1000, 2500];
 
@@ -132,8 +180,8 @@ const ContactAvatar = ({ c, size = 'md' }: { c: Contact; size?: 'sm' | 'md' | 'l
 // ACCOUNT SELECTOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AccountSelector = ({ selected, onSelect }: {
-  selected: Account; onSelect: (a: Account) => void;
+const AccountSelector = ({ selected, onSelect, accounts }: {
+  selected: Account; onSelect: (a: Account) => void; accounts: Account[];
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -177,7 +225,7 @@ const AccountSelector = ({ selected, onSelect }: {
             'border-stone-200 dark:border-white/[0.09]',
             'shadow-2xl shadow-black/15 dark:shadow-black/50'
           )}>
-            {ACCOUNTS.map(a => (
+            {accounts.map(a => (
               <button key={a.code} onClick={() => { onSelect(a); setOpen(false); }}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-3 transition-colors',
@@ -582,26 +630,65 @@ const SuccessScreen = ({
 type Step = 'form' | 'success';
 
 const RequestPage = () => {
+  const { user }               = useAuth();
+  const { wallets }            = useWallets();
+
+  // Build accounts from live wallets
+  const liveAccounts: Account[] = useMemo(() => wallets.map(w => {
+    const sym = CURRENCY_SYMBOLS[w.currency] ?? w.currency;
+    return {
+      code:       w.currency,
+      name:       CURRENCY_NAMES[w.currency] ?? w.currency,
+      symbol:     sym,
+      balance:    w.balance,
+      balanceFmt: `${sym}${w.balance.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      accountNum: w.account_number ?? '—',
+    };
+  }), [wallets]);
+
+  const [contacts,  setContacts]  = useState<Contact[]>([]);
+  const [requests,  setRequests]  = useState<PaymentRequest[]>([]);
   const [step,      setStep]      = useState<Step>('form');
-  const [account,   setAccount]   = useState<Account>(ACCOUNTS[0]);
+  const [account,   setAccount]   = useState<Account | null>(null);
   const [amount,    setAmount]    = useState('');
   const [note,      setNote]      = useState('');
   const [contact,   setContact]   = useState<Contact | null>(null);
   const [search,    setSearch]    = useState('');
-  const [requests,  setRequests]  = useState<PaymentRequest[]>(PAST_REQUESTS);
   const [filter,    setFilter]    = useState<'all' | RequestStatus>('all');
 
-  const num  = parseFloat(amount) || 0;
-  const sym  = account.symbol;
+  // Keep account in sync when wallets load
+  useEffect(() => {
+    if (liveAccounts.length > 0 && !account) {
+      setAccount(liveAccounts[0]);
+    }
+  }, [liveAccounts]);
 
-  const filteredContacts = search.trim()
-    ? CONTACTS.filter(c =>
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('beneficiaries').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setContacts(((data ?? []) as DBBeneficiary[]).map(adaptBeneficiaryToContact)));
+
+    supabase.from('payment_requests').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const sym = CURRENCY_SYMBOLS['USD'] ?? '$';
+        setRequests(((data ?? []) as DBPaymentRequest[]).map(r => adaptDBRequest(r, CURRENCY_SYMBOLS[r.currency] ?? r.currency)));
+      });
+  }, [user?.id]);
+
+  const currentAccount = account ?? liveAccounts[0];
+  const num  = parseFloat(amount) || 0;
+  const sym  = currentAccount?.symbol ?? '$';
+
+  const filteredContacts = useMemo(() => search.trim()
+    ? contacts.filter(c =>
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.email.toLowerCase().includes(search.toLowerCase())
       )
-    : CONTACTS;
+    : contacts, [search, contacts]);
 
-  const favouriteContacts = CONTACTS.filter(c => c.favourite);
+  const favouriteContacts = contacts.slice(0, 5);
 
   const filteredRequests = filter === 'all'
     ? requests
@@ -612,13 +699,29 @@ const RequestPage = () => {
     .filter(r => r.status === 'pending')
     .reduce((s, r) => s + parseFloat(r.amount.replace(/[^0-9.]/g, '')), 0);
 
-  const handleCancelRequest = (id: string) => {
+  const handleCancelRequest = async (id: string) => {
+    await supabase.from('payment_requests').update({ status: 'cancelled' }).eq('id', id);
     setRequests(prev => prev.map(r =>
       r.id === id ? { ...r, status: 'cancelled' as RequestStatus } : r
     ));
   };
 
-  const handleCreate = () => setStep('success');
+  const handleCreate = async () => {
+    if (!user || !currentAccount) return;
+    const { data } = await supabase.from('payment_requests').insert({
+      user_id:      user.id,
+      contact_name: contact?.name ?? null,
+      amount:       num > 0 ? num : null,
+      currency:     currentAccount.code,
+      note:         note || null,
+      status:       'pending',
+      expires_at:   new Date(Date.now() + 7 * 86400000).toISOString(),
+    }).select().single();
+    if (data) {
+      setRequests(prev => [adaptDBRequest(data as DBPaymentRequest, sym), ...prev]);
+    }
+    setStep('success');
+  };
   const handleReset  = () => {
     setStep('form');
     setAmount('');
@@ -626,13 +729,15 @@ const RequestPage = () => {
     setContact(null);
   };
 
+  if (!currentAccount) return null;
+
   // ── SUCCESS ──────────────────────────────────────────────────────────────
 
   if (step === 'success') {
     return (
       <div className="w-full max-w-[520px] mx-auto">
         <SuccessScreen
-          amount={num} account={account} note={note}
+          amount={num} account={currentAccount} note={note}
           contact={contact} onReset={handleReset}
         />
         <div className="h-24 lg:h-12" />
@@ -675,7 +780,7 @@ const RequestPage = () => {
                 text-stone-400 dark:text-white/25">
                 Receiving account
               </p>
-              <AccountSelector selected={account} onSelect={setAccount} />
+              <AccountSelector selected={currentAccount} onSelect={setAccount} accounts={liveAccounts} />
             </div>
 
             <div className="px-4 sm:px-5 pb-4 sm:pb-5">
@@ -881,7 +986,7 @@ const RequestPage = () => {
           {num > 0 && (
             <div>
               <SectionRule label="Share request" />
-              <ShareOptions amount={num} sym={sym} account={account} note={note} />
+              <ShareOptions amount={num} sym={sym} account={currentAccount} note={note} />
             </div>
           )}
 

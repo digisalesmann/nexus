@@ -1,4 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import {
   User,
   Shield,
@@ -210,6 +213,8 @@ const PasswordSheet = ({ onClose }: { onClose: () => void }) => {
   const [current, setCurrent] = useState('');
   const [next,    setNext]    = useState('');
   const [confirm, setConfirm] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwLoading, setPwLoading] = useState(false);
 
   const valid = current.length >= 6 && next.length >= 8 && next === confirm;
 
@@ -324,17 +329,31 @@ const PasswordSheet = ({ onClose }: { onClose: () => void }) => {
                 )}
               </div>
             ))}
+            {pwError && (
+              <div className="flex items-start gap-2 p-3 rounded-xl border
+                bg-red-50 dark:bg-red-500/[0.06] border-red-200 dark:border-red-500/20">
+                <AlertCircle size={13} className="text-red-400 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-red-500 dark:text-red-400">{pwError}</p>
+              </div>
+            )}
             <button
-              disabled={!valid}
-              onClick={() => setStep('done')}
+              disabled={!valid || pwLoading}
+              onClick={async () => {
+                setPwLoading(true);
+                setPwError(null);
+                const { error } = await supabase.auth.updateUser({ password: next });
+                setPwLoading(false);
+                if (error) setPwError(error.message);
+                else setStep('done');
+              }}
               className={cn(
                 'w-full py-3.5 rounded-xl text-[13px] font-bold transition-all',
-                valid
+                valid && !pwLoading
                   ? 'bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558] shadow-md shadow-[#C9A84C]/20'
                   : 'bg-stone-100 dark:bg-white/[0.04] text-stone-300 dark:text-white/20 cursor-not-allowed'
               )}
             >
-              Update password
+              {pwLoading ? 'Updating…' : 'Update password'}
             </button>
           </div>
         )}
@@ -348,10 +367,28 @@ const PasswordSheet = ({ onClose }: { onClose: () => void }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SettingsPage = () => {
-  const [name,    setName]    = useState('Victor Okafor');
-  const [email,   setEmail]   = useState('victor@stonegate.bank');
-  const [phone,   setPhone]   = useState('+234 812 345 6789');
-  const [address, setAddress] = useState('Lagos, Nigeria');
+  const navigate = useNavigate();
+  const { user, profile, updateProfile, signOut } = useAuth();
+
+  const [name,          setName]          = useState(profile?.full_name ?? '');
+  const [phone,         setPhone]         = useState(profile?.phone ?? '');
+  const [address,       setAddress]       = useState(profile?.country_of_residence ?? '');
+  const [nationality,   setNationality]   = useState(profile?.nationality ?? '');
+  const [dob,           setDob]           = useState(profile?.date_of_birth ?? '');
+  const [sourceOfFunds, setSourceOfFunds] = useState(profile?.source_of_funds ?? '');
+  const email = user?.email ?? '';
+
+  // Re-sync when profile loads (auth context initializes async)
+  useEffect(() => {
+    if (profile) {
+      setName(profile.full_name ?? '');
+      setPhone(profile.phone ?? '');
+      setAddress(profile.country_of_residence ?? '');
+      setNationality(profile.nationality ?? '');
+      setDob(profile.date_of_birth ?? '');
+      setSourceOfFunds(profile.source_of_funds ?? '');
+    }
+  }, [profile?.id]);
 
   const [notifPush,   setNotifPush]   = useState(true);
   const [notifEmail,  setNotifEmail]  = useState(true);
@@ -366,16 +403,23 @@ const SettingsPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [copied,       setCopied]       = useState(false);
 
+  const stgId = user ? `STG-${user.id.slice(0, 8).toUpperCase()}` : 'STG-XXXXXXXX';
+
   const handleCopyUID = () => {
-    navigator.clipboard?.writeText('STG-4721-OKAFOR').catch(() => {});
+    navigator.clipboard?.writeText(stgId).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
+
   const linkedAccounts = [
-    { name: 'Google',   sub: 'victor@gmail.com',     connected: true  },
-    { name: 'Apple ID', sub: 'victor@icloud.com',    connected: true  },
-    { name: 'Plaid',    sub: 'Bank data aggregator',  connected: false },
+    { name: 'Google',   sub: email || 'Not connected',  connected: false },
+    { name: 'Apple ID', sub: 'Sign in with Apple',       connected: false },
+    { name: 'Plaid',    sub: 'Bank data aggregator',     connected: false },
   ];
 
   return (
@@ -410,7 +454,7 @@ const SettingsPage = () => {
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#8B6F2E]
                 flex items-center justify-center text-[#0C0C0D] text-[20px] font-bold
                 shadow-md shadow-[#C9A84C]/20">
-                V
+                {name[0]?.toUpperCase() ?? '?'}
               </div>
               <button className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full
                 bg-stone-900 dark:bg-white flex items-center justify-center
@@ -441,16 +485,19 @@ const SettingsPage = () => {
           </div>
 
           <SettingCard>
-            <EditableField label="Full name"     value={name}    onSave={setName}    />
-            <EditableField label="Email address" value={email}   onSave={setEmail}   type="email" />
-            <EditableField label="Phone number"  value={phone}   onSave={setPhone}   type="tel" />
-            <EditableField label="Location"      value={address} onSave={setAddress} />
+            <EditableField label="Full name"     value={name}    onSave={v => { setName(v); updateProfile({ full_name: v }); }} />
+            <EditableField label="Email address" value={email}   onSave={() => {}} type="email" />
+            <EditableField label="Phone number"  value={phone}   onSave={v => { setPhone(v); updateProfile({ phone: v }); }} type="tel" />
+            <EditableField label="Country / Location" value={address} onSave={v => { setAddress(v); updateProfile({ country_of_residence: v }); }} />
+            <EditableField label="Nationality"      value={nationality}   onSave={v => { setNationality(v);   updateProfile({ nationality: v }); }} />
+            <EditableField label="Date of birth"    value={dob}           onSave={v => { setDob(v);           updateProfile({ date_of_birth: v }); }} type="date" />
+            <EditableField label="Source of funds"  value={sourceOfFunds} onSave={v => { setSourceOfFunds(v); updateProfile({ source_of_funds: v }); }} />
             <div className="flex items-center gap-3 px-4 py-3.5">
               <div className="flex-1 min-w-0">
                 <p className="text-[9px] font-bold tracking-[0.15em] uppercase mb-1
                   text-stone-400 dark:text-white/25">Stonegate ID</p>
                 <p className="text-[13px] font-mono font-medium text-stone-800 dark:text-white/75">
-                  STG-4721-OKAFOR
+                  {stgId}
                 </p>
               </div>
               <button onClick={handleCopyUID}
@@ -470,7 +517,7 @@ const SettingsPage = () => {
           <SectionRule label="Security" />
           <SettingCard>
             <SettingRow icon={Key} iconBg="bg-[#C9A84C]/10 dark:bg-[#C9A84C]/[0.08]" iconColor="text-[#C9A84C]"
-              label="Change password" sub="Last changed 45 days ago" onClick={() => setShowPassword(true)} />
+              label="Change password" onClick={() => setShowPassword(true)} />
             <SettingRow icon={Smartphone} iconBg="bg-sky-50 dark:bg-sky-500/10" iconColor="text-sky-600 dark:text-sky-400"
               label="Two-factor authentication" sub={twoFA ? 'Enabled via authenticator app' : 'Disabled'}
               right={<Toggle checked={twoFA} onChange={() => setTwoFA(t => !t)} />} />
@@ -529,7 +576,7 @@ const SettingsPage = () => {
           <SectionRule label="Danger zone" />
           <SettingCard>
             <SettingRow icon={LogOut} iconBg="bg-red-50 dark:bg-red-500/[0.08]" iconColor="text-red-400"
-              label="Sign out" sub="Sign out of all devices" danger onClick={() => {}} />
+              label="Sign out" sub="Sign out of all devices" danger onClick={handleSignOut} />
             <SettingRow icon={Trash2} iconBg="bg-red-50 dark:bg-red-500/[0.08]" iconColor="text-red-400"
               label="Close account" sub="Permanently delete your Stonegate account"
               danger noBorder onClick={() => {}} />

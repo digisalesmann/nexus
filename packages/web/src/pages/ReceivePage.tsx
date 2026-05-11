@@ -48,7 +48,7 @@ const ACCOUNTS: Account[] = [
     sortCode:      '04-00-04',
     routing:       '021000021',
     bankName:      'Stonegate Bank',
-    accountHolder: 'Victor Okafor',
+    accountHolder: 'Alex Morgan',
   },
   {
     code:          'GBP',
@@ -62,7 +62,7 @@ const ACCOUNTS: Account[] = [
     sortCode:      '04-00-04',
     routing:       '',
     bankName:      'Stonegate Bank',
-    accountHolder: 'Victor Okafor',
+    accountHolder: 'Alex Morgan',
   },
   {
     code:          'EUR',
@@ -76,21 +76,21 @@ const ACCOUNTS: Account[] = [
     sortCode:      '',
     routing:       '',
     bankName:      'Stonegate Bank',
-    accountHolder: 'Victor Okafor',
+    accountHolder: 'Alex Morgan',
   },
   {
-    code:          'NGN',
-    name:          'Nigerian Naira',
-    symbol:        '₦',
-    balance:       850000,
-    balanceFmt:    '₦850,000',
-    accountNum:    '0123456789',
+    code:          'CAD',
+    name:          'Canadian Dollar',
+    symbol:        'CA$',
+    balance:       5220.75,
+    balanceFmt:    'CA$5,220.75',
+    accountNum:    '00198844217711 92',
     iban:          '',
     swift:         'NXUSGB2L',
     sortCode:      '',
     routing:       '',
     bankName:      'Stonegate Bank',
-    accountHolder: 'Victor Okafor',
+    accountHolder: 'Alex Morgan',
   },
 ];
 
@@ -528,8 +528,8 @@ const MethodTabs = ({ account }: { account: Account }) => {
             {account.routing && (
               <CopyRow label="Routing number (ACH)" value={account.routing} />
             )}
-            {account.code === 'NGN' && (
-              <CopyRow label="Bank code" value="000026" />
+            {account.sortCode && (
+              <CopyRow label="Sort code" value={account.sortCode} />
             )}
           </div>
         )}
@@ -575,7 +575,7 @@ const MethodTabs = ({ account }: { account: Account }) => {
 
             <CopyRow label="Stonegate ID"    value="STG-4721-OKAFOR" accent large />
             <CopyRow label="Email"       value="victor@stonegate.bank"           />
-            <CopyRow label="Display name"value="Victor Okafor"                  />
+            <CopyRow label="Display name" value="Alex Morgan"                   />
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -14,6 +14,8 @@ import {
   Info,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -51,36 +53,35 @@ interface LoanProduct {
   popular?: boolean;
 }
 
-const ACTIVE_LOANS: Loan[] = [
-  {
-    id:          'L001',
-    type:        'personal',
-    label:       'Personal loan',
-    principal:   5000,
-    balance:     3420.50,
-    monthlyDue:  245.83,
-    rate:        12.5,
-    termMonths:  24,
-    paidMonths:  7,
-    nextDueDate: '15 Apr 2025',
-    status:      'active',
-    disbursed:   'Sep 2024',
-  },
-  {
-    id:          'L002',
-    type:        'business',
-    label:       'Business loan',
-    principal:   15000,
-    balance:     11800.00,
-    monthlyDue:  650.00,
-    rate:        9.8,
-    termMonths:  36,
-    paidMonths:  5,
-    nextDueDate: '20 Apr 2025',
-    status:      'overdue',
-    disbursed:   'Nov 2024',
-  },
-];
+// ACTIVE_LOANS now fetched from Supabase inside LoansPage
+
+interface DBLoan {
+  id: string; user_id: string; type: LoanType; label: string;
+  principal: number; balance: number; monthly_due: number; rate: number;
+  term_months: number; paid_months: number; next_due_date: string;
+  status: LoanStatus; disbursed: string;
+}
+interface DBRepayment {
+  id: string; loan_id: string; month_num: number; due_date: string;
+  principal: number; interest: number; balance: number; status: string;
+}
+
+function adaptLoan(db: DBLoan): Loan {
+  return {
+    id:          db.id,
+    type:        db.type,
+    label:       db.label,
+    principal:   db.principal,
+    balance:     db.balance,
+    monthlyDue:  db.monthly_due,
+    rate:        db.rate,
+    termMonths:  db.term_months,
+    paidMonths:  db.paid_months,
+    nextDueDate: db.next_due_date,
+    status:      db.status,
+    disbursed:   db.disbursed,
+  };
+}
 
 const LOAN_PRODUCTS: LoanProduct[] = [
   {
@@ -122,14 +123,7 @@ const LOAN_PRODUCTS: LoanProduct[] = [
   },
 ];
 
-const REPAYMENT_SCHEDULE = Array.from({ length: 10 }, (_, i) => ({
-  month:     i + 8,   // months 8–17 (showing future payments for L001)
-  date:      `${15 + 0} ${['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'][i]} 2025`,
-  principal: +(200 + Math.random() * 10).toFixed(2),
-  interest:  +(45 - i * 1.5).toFixed(2),
-  balance:   +(3420.50 - (i + 1) * 245).toFixed(2),
-  status:    i === 0 ? 'due' as const : 'upcoming' as const,
-}));
+// REPAYMENT_SCHEDULE now fetched from Supabase in RepaymentSchedule component
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -822,8 +816,8 @@ const ApplyModal = ({ product, amount, term, rate, onClose }: {
               </div>
 
               {[
-                { label: 'Full name',       placeholder: 'Victor Okafor',          type: 'text' },
-                { label: 'Email address',   placeholder: 'victor@example.com',     type: 'email' },
+                { label: 'Full name',       placeholder: 'Alex Morgan',            type: 'text' },
+                { label: 'Email address',   placeholder: 'alex@example.com',       type: 'email' },
                 { label: 'Phone number',    placeholder: '+234 800 000 0000',       type: 'tel' },
                 { label: 'Monthly income',  placeholder: '$4,500.00',              type: 'text' },
                 { label: 'Employment status', placeholder: 'Self-employed',        type: 'text' },
@@ -973,8 +967,21 @@ const ApplyModal = ({ product, amount, term, rate, onClose }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
-  const [expanded, setExpanded] = useState(false);
-  const rows = expanded ? REPAYMENT_SCHEDULE : REPAYMENT_SCHEDULE.slice(0, 4);
+  const [expanded,  setExpanded]  = useState(false);
+  const [schedule,  setSchedule]  = useState<DBRepayment[]>([]);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase
+      .from('loan_repayments')
+      .select('*')
+      .eq('loan_id', loanId)
+      .order('month_num', { ascending: true })
+      .then(({ data }) => { setSchedule((data ?? []) as DBRepayment[]); setLoading(false); });
+  }, [loanId]);
+
+  const rows = expanded ? schedule : schedule.slice(0, 4);
 
   return (
     <div className={cn(
@@ -990,7 +997,7 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
           Repayment schedule · {loanId}
         </p>
         <span className="text-[10px] font-mono text-stone-400 dark:text-white/25">
-          {REPAYMENT_SCHEDULE.length} payments remaining
+          {schedule.length} payments remaining
         </span>
       </div>
 
@@ -1007,8 +1014,20 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
 
       {/* Rows */}
       <div className="divide-y divide-stone-50 dark:divide-white/[0.03]">
-        {rows.map((row, i) => (
-          <div key={i} className={cn(
+        {loading ? (
+          [1,2,3].map(i => (
+            <div key={i} className="px-4 sm:px-5 py-3 flex items-center gap-4">
+              <div className="h-3 w-8 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+              <div className="h-3 flex-1 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+              <div className="h-3 w-16 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+            </div>
+          ))
+        ) : rows.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <p className="text-[12px] text-stone-400 dark:text-white/25">No repayment schedule found</p>
+          </div>
+        ) : rows.map((row) => (
+          <div key={row.id} className={cn(
             'px-4 sm:px-5 py-3',
             'hover:bg-stone-50 dark:hover:bg-white/[0.02] transition-colors',
             row.status === 'due' && 'bg-[#C9A84C]/[0.03] dark:bg-[#C9A84C]/[0.05]'
@@ -1018,7 +1037,7 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-[12px] font-bold text-stone-800 dark:text-white/80 font-mono">
-                    {row.date}
+                    {row.due_date}
                   </span>
                   {row.status === 'due' && (
                     <span className="text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full
@@ -1044,11 +1063,11 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
             {/* Desktop: 5-column grid */}
             <div className="hidden sm:grid sm:grid-cols-5 items-center">
               <span className="text-[12px] font-mono text-stone-500 dark:text-white/40">
-                {String(row.month).padStart(2, '0')}
+                {String(row.month_num).padStart(2, '0')}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-mono text-stone-700 dark:text-white/65">
-                  {row.date}
+                  {row.due_date}
                 </span>
                 {row.status === 'due' && (
                   <span className="text-[9px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full
@@ -1072,7 +1091,7 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
       </div>
 
       {/* Expand toggle */}
-      {REPAYMENT_SCHEDULE.length > 4 && (
+      {schedule.length > 4 && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center justify-center gap-2 py-3 border-t
@@ -1081,7 +1100,7 @@ const RepaymentSchedule = ({ loanId }: { loanId: string }) => {
             text-stone-400 dark:text-white/25
             hover:text-[#C9A84C] hover:bg-stone-50 dark:hover:bg-white/[0.02]"
         >
-          {expanded ? 'Show less' : `Show all ${REPAYMENT_SCHEDULE.length} payments`}
+          {expanded ? 'Show less' : `Show all ${schedule.length} payments`}
           <ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} />
         </button>
       )}
@@ -1163,13 +1182,29 @@ const EligibilityStrip = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LoansPage = () => {
-  const [selectedLoan,    setSelectedLoan]    = useState<Loan | null>(null);
+  const { user }                             = useAuth();
+  const [loans,         setLoans]            = useState<Loan[]>([]);
+  const [loansLoading,  setLoansLoading]     = useState(true);
+  const [selectedLoan,    setSelectedLoan]   = useState<Loan | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct>(LOAN_PRODUCTS[0]);
-  const [applyData,       setApplyData]       = useState<{ amount: number; term: number; rate: number } | null>(null);
+  const [applyData,       setApplyData]      = useState<{ amount: number; term: number; rate: number } | null>(null);
 
-  const totalOutstanding = ACTIVE_LOANS.reduce((s, l) => s + l.balance, 0);
-  const totalMonthly     = ACTIVE_LOANS.reduce((s, l) => s + l.monthlyDue, 0);
-  const hasOverdue       = ACTIVE_LOANS.some(l => l.status === 'overdue');
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('loans')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setLoans(((data ?? []) as DBLoan[]).map(adaptLoan));
+        setLoansLoading(false);
+      });
+  }, [user?.id]);
+
+  const totalOutstanding = loans.reduce((s, l) => s + l.balance, 0);
+  const totalMonthly     = loans.reduce((s, l) => s + l.monthlyDue, 0);
+  const hasOverdue       = loans.some(l => l.status === 'overdue');
 
   return (
     <div className="w-full">
@@ -1222,12 +1257,12 @@ const LoansPage = () => {
             {fmtCurrency(totalOutstanding)}
           </p>
           <p className="text-[10px] font-mono text-stone-400 dark:text-white/30">
-            across {ACTIVE_LOANS.length} loans
+            across {loans.length} loan{loans.length !== 1 ? 's' : ''}
           </p>
         </div>
         {[
-          { label: 'Monthly due',   value: fmtCurrency(totalMonthly), sub: 'next 30 days' },
-          { label: 'Active loans',  value: String(ACTIVE_LOANS.length), sub: '1 overdue'  },
+          { label: 'Monthly due',   value: fmtCurrency(totalMonthly),  sub: 'next 30 days' },
+          { label: 'Active loans',  value: String(loans.length),        sub: hasOverdue ? `${loans.filter(l => l.status === 'overdue').length} overdue` : 'all current' },
           { label: 'Credit score',  value: '720',  sub: 'Good standing'                    },
         ].map(s => (
           <div key={s.label} className={cn(
@@ -1250,7 +1285,22 @@ const LoansPage = () => {
       {/* Active loans */}
       <SectionRule label="Active loans" action={{ text: 'View all' }} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-8 lg:mb-10">
-        {ACTIVE_LOANS.map(loan => (
+        {loansLoading ? (
+          [1,2].map(i => (
+            <div key={i} className="rounded-2xl border p-5 animate-pulse
+              bg-white dark:bg-white/[0.02] border-stone-200 dark:border-white/[0.07]">
+              <div className="h-4 w-1/3 rounded bg-stone-100 dark:bg-white/[0.06] mb-4" />
+              <div className="h-6 w-1/2 rounded bg-stone-100 dark:bg-white/[0.06] mb-2" />
+              <div className="h-2 w-full rounded bg-stone-100 dark:bg-white/[0.06]" />
+            </div>
+          ))
+        ) : loans.length === 0 ? (
+          <div className="col-span-2 rounded-2xl border p-10 text-center
+            bg-white dark:bg-white/[0.02] border-stone-200 dark:border-white/[0.07]">
+            <p className="text-[13px] text-stone-400 dark:text-white/30">No active loans</p>
+            <p className="text-[11px] text-stone-300 dark:text-white/20 mt-1">Apply below to get started</p>
+          </div>
+        ) : loans.map(loan => (
           <LoanCard key={loan.id} loan={loan} onSelect={setSelectedLoan} />
         ))}
       </div>

@@ -21,7 +21,7 @@ export const WalletCard = ({ wallet, isActive }: WalletCardProps) => {
       <div className="flex justify-between items-start mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-light-primary/10 dark:bg-white/10 flex items-center justify-center font-bold text-light-primary dark:text-white">
-            {wallet.balance.currency === 'USD' ? '$' : wallet.balance.currency === 'GBP' ? '£' : '€'}
+            {({'USD':'$','GBP':'£','EUR':'€','CAD':'CA$','JPY':'¥','CHF':'Fr','AUD':'A$'} as Record<string,string>)[wallet.balance.currency] ?? wallet.balance.currency}
           </div>
           <div>
             <p className="text-xs opacity-70 font-medium tracking-wide uppercase text-light-secondary dark:text-secondary">
@@ -42,7 +42,7 @@ export const WalletCard = ({ wallet, isActive }: WalletCardProps) => {
 
       <div className="mb-8">
         <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {showBalance ? `${wallet.balance.currency === 'USD' ? '$' : '€'}${wallet.balance.amount.toLocaleString()}` : '••••••'}
+          {showBalance ? `${({'USD':'$','GBP':'£','EUR':'€','CAD':'CA$','JPY':'¥','CHF':'Fr','AUD':'A$'} as Record<string,string>)[wallet.balance.currency] ?? wallet.balance.currency}${wallet.balance.amount.toLocaleString()}` : '••••••'}
         </h2>
       </div>
 

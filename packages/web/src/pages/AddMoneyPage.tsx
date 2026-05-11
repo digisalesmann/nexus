@@ -102,7 +102,7 @@ const QUICK_AMOUNTS = [1000, 5000, 10000, 25000, 50000];
 
 const BANK_DETAILS = {
   bankName:    'Stonegate Settlement Bank',
-  accountName: 'Victor Okafor',
+  accountName: 'Alex Morgan',
   accountNum:  '0123456789',
   sortCode:    '04-00-04',
   iban:        'GB29NWBK60161331926819',

@@ -10,9 +10,15 @@ import {
   Zap,
   Shield,
   RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFlag } from '../lib/utils';
+import { useFxRates } from '../hooks/useFxRates';
+import { useWallets } from '../hooks/useWallets';
+import { useAuth } from '../context/AuthContext';
+import { getRate as liveGetRate } from '../lib/api/fx';
+import { supabase } from '../lib/supabase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -27,37 +33,38 @@ interface Currency {
 }
 
 const CURRENCIES: Currency[] = [
-  { code: 'USD', name: 'US Dollar',       symbol: '$',   balance: 14250.60, balanceFmt: '$14,250.60'  },
-  { code: 'NGN', name: 'Nigerian Naira',  symbol: '₦',  balance: 850000,   balanceFmt: '₦850,000'    },
-  { code: 'GBP', name: 'British Pound',   symbol: '£',   balance: 2100.00,  balanceFmt: '£2,100.00'   },
-  { code: 'EUR', name: 'Euro',            symbol: '€',   balance: 0,        balanceFmt: '€0.00'       },
-  { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$', balance: 0,        balanceFmt: 'CA$0.00'     },
-  { code: 'JPY', name: 'Japanese Yen',    symbol: '¥',   balance: 0,        balanceFmt: '¥0.00'       },
+  { code: 'USD', name: 'US Dollar',       symbol: '$',    balance: 14250.60, balanceFmt: '$14,250.60'  },
+  { code: 'GBP', name: 'British Pound',   symbol: '£',    balance: 2100.00,  balanceFmt: '£2,100.00'   },
+  { code: 'EUR', name: 'Euro',            symbol: '€',    balance: 3800.00,  balanceFmt: '€3,800.00'   },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$',  balance: 5220.75,  balanceFmt: 'CA$5,220.75' },
+  { code: 'JPY', name: 'Japanese Yen',    symbol: '¥',    balance: 0,        balanceFmt: '¥0.00'       },
+  { code: 'CHF', name: 'Swiss Franc',     symbol: 'Fr',   balance: 0,        balanceFmt: 'Fr0.00'      },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', balance: 0,        balanceFmt: 'A$0.00'      },
 ];
 
 const RATES: Record<string, number> = {
-  USD: 1, NGN: 1618.40, GBP: 0.7912, EUR: 0.9241, CAD: 1.3621, JPY: 149.82,
+  USD: 1, GBP: 0.7912, EUR: 0.9241, CAD: 1.3621, JPY: 149.82, CHF: 0.8982, AUD: 1.5234,
 };
 
 const SPARKLINES: Record<string, number[]> = {
-  USD_NGN: Array.from({ length: 30 }, (_, i) => 1580 + i * 1.3 + Math.sin(i * 0.8) * 12),
-  NGN_USD: Array.from({ length: 30 }, (_, i) => 0.000610 + i * 0.000002 + Math.sin(i * 0.8) * 0.000005),
   USD_GBP: Array.from({ length: 30 }, (_, i) => 0.785 + Math.sin(i * 0.5) * 0.008),
   GBP_USD: Array.from({ length: 30 }, (_, i) => 1.262 + Math.sin(i * 0.5) * 0.012),
   USD_EUR: Array.from({ length: 30 }, (_, i) => 0.920 + Math.sin(i * 0.6) * 0.006),
   EUR_USD: Array.from({ length: 30 }, (_, i) => 1.080 + Math.sin(i * 0.6) * 0.008),
-  GBP_NGN: Array.from({ length: 30 }, (_, i) => 2040 + i * 0.9 + Math.sin(i * 0.7) * 15),
-  NGN_GBP: Array.from({ length: 30 }, (_, i) => 0.000490 + Math.sin(i * 0.7) * 0.000004),
+  USD_CAD: Array.from({ length: 30 }, (_, i) => 1.355 + Math.sin(i * 0.4) * 0.010),
+  CAD_USD: Array.from({ length: 30 }, (_, i) => 0.735 + Math.sin(i * 0.4) * 0.007),
+  GBP_EUR: Array.from({ length: 30 }, (_, i) => 1.160 + Math.sin(i * 0.5) * 0.009),
+  EUR_GBP: Array.from({ length: 30 }, (_, i) => 0.860 + Math.sin(i * 0.5) * 0.006),
 };
 
 const FEE_PERCENT  = 0.005;
 const QUICK_AMOUNTS = [100, 500, 1000, 5000];
 
 const RECENT_CONVERSIONS = [
-  { from: 'USD', to: 'NGN', fromAmt: '$500.00',  toAmt: '₦809,200', rate: '1,618.40', date: '2h ago'    },
-  { from: 'GBP', to: 'EUR', fromAmt: '£400.00',  toAmt: '€465.20',  rate: '1.1630',   date: 'Yesterday' },
-  { from: 'USD', to: 'GBP', fromAmt: '$1,200.00', toAmt: '£949.44', rate: '0.7912',   date: '3d ago'    },
-  { from: 'NGN', to: 'USD', fromAmt: '₦250,000', toAmt: '$154.48',  rate: '0.000618', date: '5d ago'    },
+  { from: 'USD', to: 'EUR', fromAmt: '$500.00',   toAmt: '€462.05',  rate: '0.9241',  date: '2h ago'    },
+  { from: 'GBP', to: 'EUR', fromAmt: '£400.00',   toAmt: '€465.20',  rate: '1.1630',  date: 'Yesterday' },
+  { from: 'USD', to: 'GBP', fromAmt: '$1,200.00', toAmt: '£949.44',  rate: '0.7912',  date: '3d ago'    },
+  { from: 'EUR', to: 'CAD', fromAmt: '€800.00',   toAmt: 'CA$1,178', rate: '1.4726',  date: '5d ago'    },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,9 +130,9 @@ const SectionRule = ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CurrencySelector = ({
-  selected, exclude, onSelect, label,
+  selected, exclude, onSelect, label, currencies,
 }: {
-  selected: Currency; exclude: string; onSelect: (c: Currency) => void; label: string;
+  selected: Currency; exclude: string; onSelect: (c: Currency) => void; label: string; currencies: Currency[];
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -190,7 +197,7 @@ const CurrencySelector = ({
             )}
             style={{ maxHeight: '280px', overflowY: 'auto', scrollbarWidth: 'none' }}
           >
-            {CURRENCIES.filter(c => c.code !== exclude).map(c => (
+            {currencies.filter(c => c.code !== exclude).map(c => (
               <button
                 key={c.code}
                 onClick={() => { onSelect(c); setOpen(false); }}
@@ -435,16 +442,38 @@ const AmountInput = ({
 type Step = 'form' | 'review' | 'success';
 
 export const SwapPage = () => {
-  const [fromCur, setFromCur]       = useState<Currency>(CURRENCIES[0]);
-  const [toCur,   setToCur]         = useState<Currency>(CURRENCIES[1]);
+  const { user }                             = useAuth();
+  const { rates, loading: ratesLoading, refresh: refreshRates } = useFxRates();
+  const { wallets, reload: reloadWallets }   = useWallets();
+
+  // Build currency list from real wallets + supplement with zero-balance options
+  const buildCurrencies = (): Currency[] => {
+    const walletMap = Object.fromEntries(wallets.map(w => [w.currency, w.balance]));
+    return CURRENCIES.map(c => ({
+      ...c,
+      balance:    walletMap[c.code] ?? 0,
+      balanceFmt: `${c.symbol}${(walletMap[c.code] ?? 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    }));
+  };
+
+  const liveCurrencies = buildCurrencies();
+
+  const [fromCur, setFromCur]       = useState<Currency>(liveCurrencies[0]);
+  const [toCur,   setToCur]         = useState<Currency>(liveCurrencies[2]); // EUR
   const [fromAmt, setFromAmt]       = useState('');
   const [toAmt,   setToAmt]         = useState('');
   const [editing, setEditing]       = useState<'from' | 'to'>('from');
   const [step,    setStep]          = useState<Step>('form');
   const [swapRot, setSwapRot]       = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const rate       = getRate(fromCur.code, toCur.code);
+  // Use live rate when available, fall back to hardcoded RATES
+  const rate = ratesLoading
+    ? getRate(fromCur.code, toCur.code)
+    : liveGetRate(fromCur.code, toCur.code, rates);
+
   const sparkData  = getSparkline(fromCur.code, toCur.code);
   const sparkIsUp  = sparkData[sparkData.length - 1] >= sparkData[0];
   const sparkPct   = (((sparkData[sparkData.length - 1] - sparkData[0]) / sparkData[0]) * 100).toFixed(2);
@@ -453,6 +482,16 @@ export const SwapPage = () => {
   const fromNum = parseFloat(fromAmt) || 0;
   const fee     = fromNum * FEE_PERCENT;
   const youGet  = (fromNum - fee) * rate;
+
+  // Sync from-wallet when wallets load
+  useEffect(() => {
+    if (wallets.length > 0) {
+      const lc = buildCurrencies();
+      setFromCur(prev => lc.find(c => c.code === prev.code) ?? lc[0]);
+      setToCur(prev => lc.find(c => c.code === prev.code) ?? lc[2]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallets]);
 
   const syncFrom = useCallback((val: string) => {
     setFromAmt(val);
@@ -480,9 +519,31 @@ export const SwapPage = () => {
     setFromCur(pTo); setToCur(pFrom);
     if (toAmt) {
       setFromAmt(toAmt);
-      const n = parseFloat(toAmt) || 0;
-      const nr = getRate(pTo.code, pFrom.code);
+      const n  = parseFloat(toAmt) || 0;
+      const nr = ratesLoading ? getRate(pTo.code, pFrom.code) : liveGetRate(pTo.code, pFrom.code, rates);
       setToAmt(n > 0 ? ((n - n * FEE_PERCENT) * nr).toFixed(nr >= 100 ? 0 : 2) : '');
+    }
+  };
+
+  const handleConfirmSwap = async () => {
+    if (!user || !hasValid) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    const { data, error } = await supabase.rpc('perform_swap', {
+      p_user_id:      user.id,
+      p_from_currency: fromCur.code,
+      p_to_currency:   toCur.code,
+      p_from_amount:   fromNum,
+      p_to_amount:     youGet,
+      p_rate:          rate,
+      p_fee:           fee,
+    });
+    setSubmitting(false);
+    if (error || !data?.success) {
+      setSubmitError(data?.error ?? error?.message ?? 'Conversion failed. Please try again.');
+    } else {
+      await reloadWallets();
+      setStep('success');
     }
   };
 
@@ -650,13 +711,35 @@ export const SwapPage = () => {
           ))}
         </div>
 
+        {submitError && (
+          <div className="flex items-start gap-2.5 p-3.5 rounded-xl border mb-4
+            bg-red-50 dark:bg-red-500/[0.06] border-red-200 dark:border-red-500/20">
+            <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-red-500 dark:text-red-400">{submitError}</p>
+          </div>
+        )}
+
         <button
-          onClick={() => setStep('success')}
-          className="w-full py-4 rounded-xl text-[14px] font-bold tracking-[-0.2px] transition-all
-            bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558]
-            shadow-lg shadow-[#C9A84C]/20"
+          onClick={handleConfirmSwap}
+          disabled={submitting}
+          className={cn(
+            'w-full py-4 rounded-xl text-[14px] font-bold tracking-[-0.2px] transition-all',
+            'shadow-lg shadow-[#C9A84C]/20',
+            submitting
+              ? 'bg-[#C9A84C]/60 text-[#0C0C0D]/60 cursor-not-allowed'
+              : 'bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558]'
+          )}
         >
-          Confirm conversion
+          {submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Processing…
+            </span>
+          ) : 'Confirm conversion'}
         </button>
         <div className="h-24 lg:h-12" />
       </div>
@@ -705,6 +788,7 @@ export const SwapPage = () => {
                   selected={fromCur} exclude={toCur.code}
                   onSelect={c => { setFromCur(c); setEditing('from'); }}
                   label="You send"
+                  currencies={liveCurrencies}
                 />
                 <div className="mt-2">
                   <AmountInput
@@ -763,6 +847,7 @@ export const SwapPage = () => {
                 selected={toCur} exclude={fromCur.code}
                 onSelect={c => { setToCur(c); setEditing('to'); }}
                 label="You receive"
+                currencies={liveCurrencies}
               />
               <div className="mt-2">
                 <AmountInput

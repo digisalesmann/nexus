@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFlag } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { useWallets } from '../hooks/useWallets';
+import { supabase } from '../lib/supabase';
+import { CURRENCY_SYMBOLS } from '../lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -41,18 +45,47 @@ interface Recipient {
   lastSent:   string;
 }
 
-const RECIPIENTS: Recipient[] = [
-  { id:'r01', name:'Sophie Müller',      initials:'SM', color:'from-sky-500 to-blue-600',        bank:'Deutsche Bank',       accountNum:'DE89370400440532013000', currency:'EUR', countryCode:'EUR', country:'Germany',       method:'sepa',  favourite:true,  lastAmount:'€1,200.00', lastSent:'2h ago'    },
-  { id:'r02', name:'Amina Bello',        initials:'AB', color:'from-violet-500 to-purple-600',   bank:'Barclays',            accountNum:'GB29NWBK60161331926819', currency:'GBP', countryCode:'GBP', country:'United Kingdom', method:'bank',  favourite:true,  lastAmount:'£850.00',   lastSent:'Yesterday' },
-  { id:'r03', name:'Marcus Chen',        initials:'MC', color:'from-emerald-500 to-teal-600',    bank:'Stonegate',               accountNum:'STG-10293',              currency:'USD', countryCode:'USD', country:'United States',  method:'nexus', favourite:true,  lastAmount:'$2,500.00', lastSent:'3d ago'    },
-  { id:'r04', name:'Yuki Tanaka',        initials:'YT', color:'from-rose-500 to-pink-600',       bank:'Sumitomo Mitsui',     accountNum:'JP71036900101',          currency:'USD', countryCode:'USD', country:'Japan',          method:'swift', favourite:false, lastAmount:'$320.00',   lastSent:'1w ago'    },
-  { id:'r05', name:'Fatima Al-Rashid',   initials:'FA', color:'from-amber-500 to-orange-600',    bank:'Emirates NBD',        accountNum:'AE070331234567890123456', currency:'USD', countryCode:'USD', country:'UAE',            method:'swift', favourite:false, lastAmount:'$1,080',    lastSent:'2w ago'    },
-  { id:'r06', name:'TechCorp Ltd.',      initials:'TC', color:'from-slate-500 to-slate-700',     bank:'JP Morgan Chase',     accountNum:'US29CHAS00014060286',     currency:'USD', countryCode:'USD', country:'United States',  method:'swift', favourite:true,  lastAmount:'$4,500',    lastSent:'5d ago'    },
-  { id:'r07', name:'Léa Dubois',         initials:'LD', color:'from-fuchsia-500 to-pink-600',    bank:'BNP Paribas',         accountNum:'FR7630006000011234567890',currency:'EUR', countryCode:'EUR', country:'France',          method:'sepa',  favourite:false, lastAmount:'€380.00',   lastSent:'3w ago'    },
-  { id:'r08', name:'Carlos Mendoza',     initials:'CM', color:'from-lime-500 to-green-600',      bank:'BBVA',                accountNum:'ES7921000813610123456789',currency:'EUR', countryCode:'EUR', country:'Spain',           method:'sepa',  favourite:false, lastAmount:'€640.00',   lastSent:'1mo ago'   },
-  { id:'r09', name:'Priya Sharma',       initials:'PS', color:'from-cyan-500 to-blue-500',       bank:'HDFC Bank',           accountNum:'IN72026400006707509882',  currency:'USD', countryCode:'USD', country:'India',           method:'swift', favourite:false, lastAmount:'$200.00',   lastSent:'2mo ago'   },
-  { id:'r10', name:'David Okonkwo',      initials:'DO', color:'from-orange-500 to-red-500',      bank:'First Bank Nigeria',  accountNum:'3011234567',              currency:'USD', countryCode:'USD', country:'Nigeria',         method:'swift', favourite:false, lastAmount:'$500.00',   lastSent:'3mo ago'   },
+// ─── Beneficiary → Recipient adapter ─────────────────────────────────────────
+const RECIP_COLORS = [
+  'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600', 'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600', 'from-fuchsia-500 to-pink-600',
+  'from-lime-500 to-green-600', 'from-cyan-500 to-blue-500',
+  'from-orange-500 to-red-500', 'from-slate-500 to-slate-700',
 ];
+
+function recipInitials(name: string): string {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+function recipColor(id: string): string {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return RECIP_COLORS[h % RECIP_COLORS.length];
+}
+
+interface DBBeneficiary {
+  id: string; user_id: string; name: string; bank_name: string | null;
+  account_number: string | null; iban: string | null; sort_code: string | null;
+  currency: string; country: string | null; created_at: string;
+}
+
+function adaptBeneficiary(db: DBBeneficiary): Recipient {
+  return {
+    id:          db.id,
+    name:        db.name,
+    initials:    recipInitials(db.name),
+    color:       recipColor(db.id),
+    bank:        db.bank_name ?? 'Bank transfer',
+    accountNum:  db.account_number ?? db.iban ?? '—',
+    currency:    db.currency,
+    countryCode: db.currency,
+    country:     db.country ?? '—',
+    method:      'bank',
+    favourite:   false,
+    lastAmount:  '—',
+    lastSent:    '—',
+  };
+}
 
 interface Account {
   code:       string;
@@ -62,11 +95,14 @@ interface Account {
   balanceFmt: string;
 }
 
-const ACCOUNTS: Account[] = [
-  { code:'USD', name:'US Dollar',        symbol:'$',  balance:14250.60, balanceFmt:'$14,250.60' },
-  { code:'GBP', name:'British Pound',    symbol:'£',  balance:2100.00,  balanceFmt:'£2,100.00'  },
-  { code:'EUR', name:'Euro',             symbol:'€',  balance:3800.00,  balanceFmt:'€3,800.00'  },
-  { code:'NGN', name:'Nigerian Naira',   symbol:'₦', balance:850000,   balanceFmt:'₦850,000'   },
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'US Dollar', GBP: 'British Pound', EUR: 'Euro',
+  CAD: 'Canadian Dollar', JPY: 'Japanese Yen', CHF: 'Swiss Franc', AUD: 'Australian Dollar',
+};
+
+// Fallback accounts when wallets are loading
+const FALLBACK_ACCOUNTS: Account[] = [
+  { code:'GBP', name:'British Pound', symbol:'£', balance:0, balanceFmt:'£0.00' },
 ];
 
 const FEE_PCT = 0.005;
@@ -111,8 +147,8 @@ const Avatar = ({ r, size = 'md' }: { r: Recipient; size?: 'sm' | 'md' | 'lg' })
 // ACCOUNT SELECTOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AccountSelector = ({ selected, onSelect }: {
-  selected: Account; onSelect: (a: Account) => void;
+const AccountSelector = ({ selected, onSelect, accounts }: {
+  selected: Account; onSelect: (a: Account) => void; accounts: Account[];
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -158,7 +194,7 @@ const AccountSelector = ({ selected, onSelect }: {
             'border-stone-200 dark:border-white/[0.09]',
             'shadow-2xl shadow-black/15 dark:shadow-black/50'
           )}>
-            {ACCOUNTS.map(a => (
+            {accounts.map(a => (
               <button key={a.code} onClick={() => { onSelect(a); setOpen(false); }}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-3 transition-colors',
@@ -237,16 +273,15 @@ const RecipientRow = ({ r, onSelect }: { r: Recipient; onSelect: (r: Recipient) 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CURRENCIES_INTL = [
-  { code: 'USD', name: 'US Dollar',        flag: 'USD' },
-  { code: 'EUR', name: 'Euro',             flag: 'EUR' },
-  { code: 'GBP', name: 'British Pound',    flag: 'GBP' },
-  { code: 'NGN', name: 'Nigerian Naira',   flag: 'NGN' },
-  { code: 'JPY', name: 'Japanese Yen',     flag: 'USD' },
-  { code: 'CAD', name: 'Canadian Dollar',  flag: 'USD' },
-  { code: 'AUD', name: 'Australian Dollar',flag: 'USD' },
-  { code: 'CHF', name: 'Swiss Franc',      flag: 'USD' },
-  { code: 'SGD', name: 'Singapore Dollar', flag: 'USD' },
-  { code: 'AED', name: 'UAE Dirham',       flag: 'USD' },
+  { code: 'USD', name: 'US Dollar',         flag: 'USD' },
+  { code: 'EUR', name: 'Euro',              flag: 'EUR' },
+  { code: 'GBP', name: 'British Pound',     flag: 'GBP' },
+  { code: 'JPY', name: 'Japanese Yen',      flag: 'JPY' },
+  { code: 'CAD', name: 'Canadian Dollar',   flag: 'CAD' },
+  { code: 'AUD', name: 'Australian Dollar', flag: 'AUD' },
+  { code: 'CHF', name: 'Swiss Franc',       flag: 'CHF' },
+  { code: 'SGD', name: 'Singapore Dollar',  flag: 'SGD' },
+  { code: 'AED', name: 'UAE Dirham',        flag: 'AED' },
 ];
 
 const METHODS_INTL: { id: TransferMethod; label: string; sub: string }[] = [
@@ -476,10 +511,11 @@ const NewRecipientForm = ({ onDone }: { onDone: (r: Recipient) => void }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AmountStep = ({
-  recipient, account, onAccountChange, onBack, onNext,
+  recipient, account, accounts, onAccountChange, onBack, onNext,
 }: {
   recipient: Recipient;
   account: Account;
+  accounts: Account[];
   onAccountChange: (a: Account) => void;
   onBack: () => void;
   onNext: (amount: number, note: string) => void;
@@ -525,7 +561,7 @@ const AmountStep = ({
           text-stone-400 dark:text-white/25">
           From account
         </p>
-        <AccountSelector selected={account} onSelect={onAccountChange} />
+        <AccountSelector selected={account} onSelect={onAccountChange} accounts={accounts} />
       </div>
 
       {/* Amount input */}
@@ -644,10 +680,11 @@ const AmountStep = ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ReviewStep = ({
-  recipient, account, amount, note, onBack, onConfirm,
+  recipient, account, amount, note, onBack, onConfirm, submitting, submitError,
 }: {
   recipient: Recipient; account: Account; amount: number; note: string;
   onBack: () => void; onConfirm: () => void;
+  submitting?: boolean; submitError?: string | null;
 }) => {
   const sym  = account.symbol;
   const fee  = amount * FEE_PCT;
@@ -739,13 +776,34 @@ const ReviewStep = ({
         ))}
       </div>
 
+      {submitError && (
+        <div className="flex items-start gap-2.5 p-3.5 rounded-xl border
+          bg-red-50 dark:bg-red-500/[0.06] border-red-200 dark:border-red-500/20">
+          <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
+          <p className="text-[12px] text-red-500 dark:text-red-400">{submitError}</p>
+        </div>
+      )}
+
       <button
         onClick={onConfirm}
-        className="w-full py-4 rounded-xl text-[14px] font-bold tracking-[-0.2px] transition-all
-          bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558]
-          shadow-lg shadow-[#C9A84C]/20"
+        disabled={submitting}
+        className={cn(
+          'w-full py-4 rounded-xl text-[14px] font-bold tracking-[-0.2px] transition-all',
+          'shadow-lg shadow-[#C9A84C]/20',
+          submitting
+            ? 'bg-[#C9A84C]/60 text-[#0C0C0D]/60 cursor-not-allowed'
+            : 'bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558]'
+        )}
       >
-        Confirm & send
+        {submitting ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Processing…
+          </span>
+        ) : 'Confirm & send'}
       </button>
     </div>
   );
@@ -855,26 +913,68 @@ const SuccessStep = ({
 type Step = 'select' | 'amount' | 'review' | 'success';
 
 const SendPage = () => {
-  const [step,      setStep]      = useState<Step>('select');
-  const [recipient, setRecipient] = useState<Recipient | null>(null);
-  const [account,   setAccount]   = useState<Account>(ACCOUNTS[0]);
-  const [amount,    setAmount]    = useState(0);
-  const [note,      setNote]      = useState('');
-  const [search,    setSearch]    = useState('');
-  const [showNew,   setShowNew]   = useState(false);
+  const { user }                    = useAuth();
+  const { wallets, reload: reloadWallets } = useWallets();
+
+  // Build live accounts from wallets
+  const liveAccounts: Account[] = wallets.length > 0
+    ? wallets.map(w => {
+        const sym = CURRENCY_SYMBOLS[w.currency] ?? w.currency;
+        return {
+          code:       w.currency,
+          name:       CURRENCY_NAMES[w.currency] ?? w.currency,
+          symbol:     sym,
+          balance:    w.balance,
+          balanceFmt: `${sym}${w.balance.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        };
+      })
+    : FALLBACK_ACCOUNTS;
+
+  const [recipients,  setRecipients]  = useState<Recipient[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('beneficiaries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setRecipients(((data ?? []) as DBBeneficiary[]).map(adaptBeneficiary)));
+  }, [user?.id]);
+
+  const [step,        setStep]        = useState<Step>('select');
+  const [recipient,   setRecipient]   = useState<Recipient | null>(null);
+  const [account,     setAccount]     = useState<Account>(liveAccounts[0]);
+  const [amount,      setAmount]      = useState(0);
+  const [note,        setNote]        = useState('');
+  const [search,      setSearch]      = useState('');
+  const [showNew,     setShowNew]     = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Keep account in sync when wallets load
+  useEffect(() => {
+    if (wallets.length > 0) {
+      const la = wallets.map(w => {
+        const sym = CURRENCY_SYMBOLS[w.currency] ?? w.currency;
+        return { code: w.currency, name: CURRENCY_NAMES[w.currency] ?? w.currency, symbol: sym, balance: w.balance, balanceFmt: `${sym}${w.balance.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` };
+      });
+      setAccount(prev => la.find(a => a.code === prev.code) ?? la[0]);
+    }
+  }, [wallets]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return RECIPIENTS;
+    if (!search.trim()) return recipients;
     const q = search.toLowerCase();
-    return RECIPIENTS.filter(r =>
+    return recipients.filter(r =>
       r.name.toLowerCase().includes(q) ||
       r.bank.toLowerCase().includes(q) ||
       r.accountNum.includes(q) ||
       r.currency.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, recipients]);
 
-  const favourites = RECIPIENTS.filter(r => r.favourite);
+  const favourites = recipients.slice(0, 5);
 
   const handleSelectRecipient = (r: Recipient) => {
     setRecipient(r);
@@ -893,7 +993,28 @@ const SendPage = () => {
     setStep('review');
   };
 
-  const handleConfirm = () => setStep('success');
+  const handleConfirm = async () => {
+    if (!user || !recipient) return;
+    const fee = amount * FEE_PCT;
+    setSubmitting(true);
+    setSubmitError(null);
+    const { data, error } = await supabase.rpc('perform_transfer', {
+      p_user_id:           user.id,
+      p_currency:          account.code,
+      p_amount:            amount,
+      p_fee:               fee,
+      p_recipient_name:    recipient.name,
+      p_recipient_account: recipient.accountNum,
+      p_description:       note || null,
+    });
+    setSubmitting(false);
+    if (error || !data?.success) {
+      setSubmitError(data?.error ?? error?.message ?? 'Transfer failed. Please try again.');
+    } else {
+      await reloadWallets();
+      setStep('success');
+    }
+  };
 
   const handleReset = () => {
     setStep('select');
@@ -945,6 +1066,8 @@ const SendPage = () => {
               amount={amount} note={note}
               onBack={() => setStep('amount')}
               onConfirm={handleConfirm}
+              submitting={submitting}
+              submitError={submitError}
             />
           </div>
 
@@ -1059,6 +1182,7 @@ const SendPage = () => {
             <AmountStep
               recipient={recipient}
               account={account}
+              accounts={liveAccounts}
               onAccountChange={setAccount}
               onBack={() => setStep('select')}
               onNext={handleAmountNext}
@@ -1180,15 +1304,17 @@ const SendPage = () => {
               'border-stone-200 dark:border-white/[0.07]'
             )}>
               <p className="text-[13px] font-semibold text-stone-400 dark:text-white/30 mb-1">
-                No recipients found
+                {search ? 'No recipients found' : 'No beneficiaries yet'}
               </p>
               <p className="text-[11px] text-stone-300 dark:text-white/20 mb-4">
-                Try a different name or account number
+                {search ? 'Try a different name or account number' : 'Add one below to get started'}
               </p>
-              <button onClick={() => setSearch('')}
-                className="text-[12px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
-                Clear search
-              </button>
+              {search && (
+                <button onClick={() => setSearch('')}
+                  className="text-[12px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
+                  Clear search
+                </button>
+              )}
             </div>
           ) : (
             <div className={cn(

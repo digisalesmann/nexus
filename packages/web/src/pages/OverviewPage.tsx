@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BalanceHero } from '../components/BalanceHero';
 import {
   ArrowUpRight,
@@ -9,7 +9,13 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getFlag } from '../lib/utils';
+import { getFlag, CURRENCY_SYMBOLS } from '../lib/utils';
+import { useTransactions } from '../hooks/useTransactions';
+import { useFxRates } from '../hooks/useFxRates';
+import { getRate } from '../lib/api/fx';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import type { Transaction, Beneficiary } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION RULE
@@ -248,14 +254,6 @@ interface Tx {
   status: 'completed' | 'pending' | 'failed';
 }
 
-const TRANSACTIONS: Tx[] = [
-  { id: '1', icon: 'down',  title: 'Received from James O.', sub: 'Wire transfer · USD', amount: '+$1,200.00', isCredit: true,  time: '2m ago',    status: 'completed' },
-  { id: '2', icon: 'swap',  title: 'USD → NGN conversion',   sub: 'FX swap · Rate 1,618', amount: '-$500.00', isCredit: false, time: '1h ago',    status: 'completed' },
-  { id: '3', icon: 'up',    title: 'Sent to Amina B.',       sub: 'Transfer · GBP',       amount: '-£250.00', isCredit: false, time: '3h ago',    status: 'completed' },
-  { id: '4', icon: 'down',  title: 'Received from client',   sub: 'Invoice #4421 · EUR',  amount: '+€3,800',  isCredit: true,  time: 'Yesterday', status: 'completed' },
-  { id: '5', icon: 'up',    title: 'Rent payment',           sub: 'Standing order · NGN', amount: '-₦250k',   isCredit: false, time: 'Yesterday', status: 'pending'   },
-  { id: '6', icon: 'swap',  title: 'GBP → EUR conversion',   sub: 'FX swap · Rate 1.163', amount: '-£400.00', isCredit: false, time: '2d ago',    status: 'completed' },
-];
 
 const STATUS_STYLES = {
   completed: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10',
@@ -330,18 +328,41 @@ const TxRow = ({ tx }: { tx: Tx }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SPENDING DONUT
 // ─────────────────────────────────────────────────────────────────────────────
-const SPEND_DATA = [
-  { label: 'Housing',   value: 35, color: '#C9A84C' },
-  { label: 'Food',      value: 20, color: '#60a5fa' },
-  { label: 'Transfers', value: 18, color: '#34d399' },
-  { label: 'Shopping',  value: 14, color: '#a78bfa' },
-  { label: 'Other',     value: 13, color: '#94a3b8' },
-];
+const SPEND_COLORS = ['#C9A84C', '#60a5fa', '#34d399', '#a78bfa', '#94a3b8'];
 
-const SpendDonut = () => {
+function buildSpendData(txs: Transaction[]): { label: string; value: number; color: string }[] {
+  const now   = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const debits = txs.filter(t =>
+    (t.type === 'transfer_out' || t.type === 'withdrawal' || t.type === 'swap') &&
+    new Date(t.created_at) >= start
+  );
+  const totals: Record<string, number> = {};
+  for (const t of debits) {
+    const label = t.type === 'swap' ? 'FX swaps'
+      : t.type === 'withdrawal'    ? 'Withdrawals'
+      : 'Transfers';
+    totals[label] = (totals[label] ?? 0) + (t.from_amount ?? 0);
+  }
+  const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0) || 1;
+  return entries.slice(0, 5).map(([label, v], i) => ({
+    label,
+    value: Math.round((v / total) * 100),
+    color: SPEND_COLORS[i] ?? '#94a3b8',
+  }));
+}
+
+const SpendDonut = ({ txs, totalUSD }: { txs: Transaction[]; totalUSD: number }) => {
+  const data  = useMemo(() => buildSpendData(txs), [txs]);
   const R = 54, cx = 70, cy = 70, stroke = 16;
   const circ = 2 * Math.PI * R;
   let offset = 0;
+
+  const isEmpty = data.length === 0;
+  const displayData = isEmpty
+    ? [{ label: 'No spending', value: 100, color: '#e7e5e4' }]
+    : data;
 
   return (
     <div className={cn(
@@ -353,13 +374,12 @@ const SpendDonut = () => {
         text-stone-400 dark:text-white/25">
         Spending this month
       </p>
-      {/* Donut + legend — side by side always, donut shrinks on mobile */}
       <div className="flex items-center gap-4 lg:gap-6">
         <div className="shrink-0">
           <svg width="120" height="120" viewBox="0 0 140 140" className="w-[100px] h-[100px] lg:w-[120px] lg:h-[120px]">
             <circle cx={cx} cy={cy} r={R} fill="none" strokeWidth={stroke}
               className="stroke-stone-100 dark:stroke-white/[0.04]" />
-            {SPEND_DATA.map((seg, i) => {
+            {displayData.map((seg, i) => {
               const dash   = (seg.value / 100) * circ;
               const gap    = circ - dash;
               const rotate = (offset / 100) * 360 - 90;
@@ -372,20 +392,22 @@ const SpendDonut = () => {
                   strokeLinecap="butt" />
               );
             })}
-            <text x={cx} y={cy - 7}  textAnchor="middle" fontSize="10" className="fill-stone-400 dark:fill-white/30">Total</text>
-            <text x={cx} y={cy + 9}  textAnchor="middle" fontSize="14" className="fill-stone-900 dark:fill-white font-mono" fontFamily="'DM Mono', monospace">$4,830</text>
+            <text x={cx} y={cy - 7} textAnchor="middle" fontSize="10" className="fill-stone-400 dark:fill-white/30">Total</text>
+            <text x={cx} y={cy + 9} textAnchor="middle" fontSize="14" className="fill-stone-900 dark:fill-white font-mono" fontFamily="'DM Mono', monospace">
+              ${totalUSD.toLocaleString('en', { maximumFractionDigits: 0 })}
+            </text>
           </svg>
         </div>
         <div className="flex flex-col gap-2 flex-1 min-w-0">
-          {SPEND_DATA.map((seg) => (
+          {isEmpty ? (
+            <p className="text-[11px] text-stone-400 dark:text-white/25">No spending this month</p>
+          ) : data.map((seg) => (
             <div key={seg.label} className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-              <span className="text-[11px] lg:text-[12px] flex-1 truncate
-                text-stone-600 dark:text-white/50">
+              <span className="text-[11px] lg:text-[12px] flex-1 truncate text-stone-600 dark:text-white/50">
                 {seg.label}
               </span>
-              <span className="text-[11px] lg:text-[12px] font-mono shrink-0
-                text-stone-500 dark:text-white/40">
+              <span className="text-[11px] lg:text-[12px] font-mono shrink-0 text-stone-500 dark:text-white/40">
                 {seg.value}%
               </span>
             </div>
@@ -397,86 +419,24 @@ const SpendDonut = () => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FX RATES STRIP
+// QUICK SEND — live beneficiaries
 // ─────────────────────────────────────────────────────────────────────────────
-const RATES = [
-  { pair: 'USD/NGN', rate: '1,618.40', change: '+0.3%', up: true  },
-  { pair: 'GBP/USD', rate: '1.2634',   change: '+1.2%', up: true  },
-  { pair: 'EUR/USD', rate: '1.0821',   change: '-0.2%', up: false },
-  { pair: 'USD/JPY', rate: '149.82',   change: '-0.5%', up: false },
-  { pair: 'GBP/NGN', rate: '2,044.10', change: '+1.5%', up: true  },
+const AVATAR_COLORS = [
+  'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600', 'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
 ];
 
-const RatesStrip = () => (
-  <div className={cn(
-    'rounded-2xl border overflow-hidden',
-    'bg-white dark:bg-white/[0.02]',
-    'border-stone-200 dark:border-white/[0.07]'
-  )}>
-    <div className="flex items-center justify-between px-4 lg:px-5 py-3.5 lg:py-4
-      border-b border-stone-100 dark:border-white/[0.05]">
-      <p className="text-[9px] font-bold tracking-[0.2em] uppercase
-        text-stone-400 dark:text-white/25">
-        Live FX rates
-      </p>
-      <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-500">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        Live
-      </span>
-    </div>
-    <div className="divide-y divide-stone-100 dark:divide-white/[0.04]">
-      {RATES.map((r) => (
-        <div key={r.pair}
-          className="flex items-center justify-between px-4 lg:px-5 py-3 lg:py-3.5
-            hover:bg-stone-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer">
+function makeInitials(name: string): string {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+function colorFor(id: string): string {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
 
-          {/* Pair + flags */}
-          <div className="flex items-center gap-2 lg:gap-3">
-            <div className="flex -space-x-1">
-              <img src={getFlag(r.pair.split('/')[0])} alt=""
-                className="w-4 h-4 lg:w-5 lg:h-5 rounded-full border border-white dark:border-[#111] object-cover" />
-              <img src={getFlag(r.pair.split('/')[1])} alt=""
-                className="w-4 h-4 lg:w-5 lg:h-5 rounded-full border border-white dark:border-[#111] object-cover" />
-            </div>
-            <span className="text-[12px] lg:text-[13px] font-bold font-mono tracking-wide
-              text-stone-700 dark:text-white/70">
-              {r.pair}
-            </span>
-          </div>
-
-          {/* Rate + change */}
-          <div className="flex items-center gap-2 lg:gap-4">
-            <span className="text-[12px] lg:text-[13px] font-mono tabular-nums
-              text-stone-800 dark:text-white/80">
-              {r.rate}
-            </span>
-            <span className={cn(
-              'text-[10px] lg:text-[11px] font-mono px-2 py-0.5 rounded-md tabular-nums w-14 lg:w-16 text-center',
-              r.up
-                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                : 'bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400'
-            )}>
-              {r.change}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// QUICK SEND
-// ─────────────────────────────────────────────────────────────────────────────
-const CONTACTS = [
-  { name: 'Amina B.',  initials: 'AB', color: 'from-violet-500 to-purple-600' },
-  { name: 'James O.',  initials: 'JO', color: 'from-sky-500 to-blue-600'     },
-  { name: 'Chioma E.', initials: 'CE', color: 'from-emerald-500 to-teal-600' },
-  { name: 'David M.',  initials: 'DM', color: 'from-rose-500 to-pink-600'    },
-  { name: 'Fatima A.', initials: 'FA', color: 'from-amber-500 to-orange-600' },
-];
-
-const QuickSend = () => (
+const QuickSend = ({ beneficiaries }: { beneficiaries: Beneficiary[] }) => (
   <div className={cn(
     'rounded-2xl border p-4 lg:p-5',
     'bg-white dark:bg-white/[0.02]',
@@ -486,17 +446,10 @@ const QuickSend = () => (
       text-stone-400 dark:text-white/25">
       Quick send
     </p>
-
-    {/*
-      Scrollable row — scrollbar hidden via inline style (works cross-browser:
-      Firefox: scrollbarWidth none, IE/Edge: msOverflowStyle none,
-      Webkit: ::-webkit-scrollbar handled via global CSS or the className below)
-    */}
     <div
       className="flex items-center gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
     >
-      {/* Add new */}
       <button className="flex flex-col items-center gap-2 shrink-0 group">
         <div className={cn(
           'w-10 h-10 lg:w-11 lg:h-11 rounded-full flex items-center justify-center transition-colors',
@@ -509,50 +462,127 @@ const QuickSend = () => (
         <span className="text-[10px] font-medium text-stone-400 dark:text-white/25">New</span>
       </button>
 
-      {CONTACTS.map((c) => (
-        <button key={c.name} className="flex flex-col items-center gap-2 shrink-0 group">
+      {beneficiaries.slice(0, 6).map((b) => (
+        <button key={b.id} className="flex flex-col items-center gap-2 shrink-0 group">
           <div className={cn(
             'w-10 h-10 lg:w-11 lg:h-11 rounded-full flex items-center justify-center',
             'text-white text-[11px] font-bold transition-all shadow-sm',
-            `bg-gradient-to-br ${c.color}`,
+            `bg-gradient-to-br ${colorFor(b.id)}`,
             'group-hover:scale-105 group-active:scale-95'
           )}>
-            {c.initials}
+            {makeInitials(b.name)}
           </div>
           <span className="text-[10px] font-medium text-stone-500 dark:text-white/35">
-            {c.name.split(' ')[0]}
+            {b.name.split(' ')[0]}
           </span>
         </button>
       ))}
+
+      {beneficiaries.length === 0 && (
+        <p className="text-[11px] text-stone-400 dark:text-white/25 ml-1">
+          Add beneficiaries to quick-send
+        </p>
+      )}
     </div>
   </div>
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LIVE TX → UI ADAPTER
+// ─────────────────────────────────────────────────────────────────────────────
+function adaptTx(tx: Transaction): Tx {
+  const isCredit = tx.type === 'transfer_in' || tx.type === 'deposit';
+  const icon: Tx['icon'] = tx.type === 'swap' ? 'swap' : isCredit ? 'down' : 'up';
+
+  const currency = tx.from_currency ?? tx.to_currency ?? 'USD';
+  const amount   = tx.from_amount ?? tx.to_amount ?? 0;
+  const sym      = CURRENCY_SYMBOLS[currency] ?? currency;
+
+  const title = tx.type === 'swap'
+    ? `${tx.from_currency ?? '?'} → ${tx.to_currency ?? '?'} conversion`
+    : tx.type === 'transfer_out'
+    ? `Sent to ${tx.recipient_name ?? 'recipient'}`
+    : tx.description ?? 'Transaction';
+
+  const sub = tx.type === 'swap'
+    ? `FX conversion · ${tx.from_currency}/${tx.to_currency}`
+    : tx.recipient_name
+    ? `${tx.recipient_name} · ${currency}`
+    : currency;
+
+  const amt = isCredit
+    ? `+${sym}${Math.abs(amount).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `-${sym}${Math.abs(amount).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const elapsed = Math.round((Date.now() - new Date(tx.created_at).getTime()) / 60000);
+  const timeLabel = elapsed < 1 ? 'Just now' : elapsed < 60 ? `${elapsed}m ago`
+    : elapsed < 1440 ? `${Math.round(elapsed / 60)}h ago` : 'Yesterday';
+
+  const uiStatus: 'completed' | 'pending' | 'failed' =
+    tx.status === 'completed' ? 'completed' : tx.status === 'failed' ? 'failed' : 'pending';
+
+  return { id: tx.id, icon, title, sub, amount: amt, isCredit, time: timeLabel, status: uiStatus };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE
 // ─────────────────────────────────────────────────────────────────────────────
+const LIVE_PAIRS = [
+  ['EUR', 'USD'], ['GBP', 'USD'], ['USD', 'JPY'], ['USD', 'CAD'], ['GBP', 'EUR'],
+] as const;
+
 const OverviewPage = () => {
+  const { user }                             = useAuth();
+  const { transactions, loading: txLoading } = useTransactions(20);
+  const { rates, loading: ratesLoading }     = useFxRates();
+  const [beneficiaries, setBeneficiaries]    = useState<Beneficiary[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('beneficiaries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(6)
+      .then(({ data }) => setBeneficiaries((data ?? []) as Beneficiary[]));
+  }, [user?.id]);
+
+  // Derive stat card values from real transactions
+  const totalSent     = transactions.filter(t => t.type === 'transfer_out' || t.type === 'withdrawal').reduce((s, t) => s + (t.from_amount ?? 0), 0);
+  const totalReceived = transactions.filter(t => t.type === 'transfer_in'  || t.type === 'deposit').reduce((s, t) => s + (t.to_amount ?? 0), 0);
+  const conversions   = transactions.filter(t => t.type === 'swap').length;
+  const feesSaved     = transactions.reduce((s, t) => s + (t.fee ?? 0) * 0.7, 0); // vs bank avg
+
+  const liveRates = LIVE_PAIRS.map(([from, to]) => {
+    const r   = ratesLoading ? null : getRate(from, to, rates);
+    const key = `${from}/${to}`;
+    return {
+      pair: key,
+      rate: r != null ? (r >= 100 ? r.toFixed(2) : r.toFixed(4)) : '…',
+      change: '+0.0%',
+      up: true,
+    };
+  });
+
   return (
     <div className="w-full">
 
       {/* Balance hero */}
       <BalanceHero />
 
-      {/* Stat cards — 2-col on mobile, 4-col on desktop */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3 mb-8 lg:mb-14">
-        <StatCard label="Total sent"     value="$8,420"  sub="+12% this month"   up={true} accent />
-        <StatCard label="Total received" value="$14,200" sub="+28% this month"   up={true}        />
-        <StatCard label="Conversions"    value="6"       sub="3 pending"                         />
-        <StatCard label="Saved (fees)"   value="$124.50" sub="vs bank transfers"                 />
+        <StatCard label="Total sent"     value={`$${totalSent.toFixed(0)}`}     sub="this account"      up={false} accent />
+        <StatCard label="Total received" value={`$${totalReceived.toFixed(0)}`} sub="this account"      up={true}        />
+        <StatCard label="Conversions"    value={String(conversions)}            sub="transactions"                       />
+        <StatCard label="Fees saved"     value={`$${feesSaved.toFixed(2)}`}     sub="vs bank transfers"                  />
       </div>
 
       {/* Portfolio chart */}
       <SectionRule label="Portfolio performance" />
       <PortfolioChart />
 
-      {/* Main content grid:
-          Mobile  → single column, right widgets come AFTER transactions
-          Desktop → transactions | right column (340px) side by side         */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_340px] gap-5 lg:gap-6 mb-8 lg:mb-14">
 
         {/* Transactions */}
@@ -564,7 +594,25 @@ const OverviewPage = () => {
             'border-stone-200 dark:border-white/[0.07]'
           )}>
             <div className="px-3 lg:px-4 py-1.5 lg:py-2">
-              {TRANSACTIONS.map((tx) => <TxRow key={tx.id} tx={tx} />)}
+              {txLoading ? (
+                [1,2,3].map(i => (
+                  <div key={i} className="flex items-center gap-3 py-3.5
+                    border-b border-stone-100 dark:border-white/[0.04] last:border-0">
+                    <div className="w-8 h-8 rounded-xl bg-stone-100 dark:bg-white/[0.06] animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-32 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                    </div>
+                    <div className="h-3 w-16 rounded bg-stone-100 dark:bg-white/[0.06] animate-pulse" />
+                  </div>
+                ))
+              ) : transactions.length === 0 ? (
+                <p className="text-center py-8 text-[12px] text-stone-400 dark:text-white/25">
+                  No transactions yet
+                </p>
+              ) : (
+                transactions.slice(0, 6).map(tx => <TxRow key={tx.id} tx={adaptTx(tx)} />)
+              )}
             </div>
             <div className="px-4 py-3 border-t border-stone-100 dark:border-white/[0.05]">
               <button className="w-full text-center text-[11px] font-bold uppercase tracking-[0.12em] transition-colors
@@ -575,17 +623,52 @@ const OverviewPage = () => {
           </div>
         </div>
 
-        {/* Right column — stacks below on mobile */}
         <div className="flex flex-col gap-4 lg:gap-6">
-          <QuickSend />
-          <SpendDonut />
+          <QuickSend beneficiaries={beneficiaries} />
+          <SpendDonut txs={transactions} totalUSD={totalSent} />
         </div>
       </div>
 
-      {/* FX rates */}
+      {/* FX rates — live */}
       <SectionRule label="Foreign exchange" action={{ text: 'Convert now' }} />
       <div className="mb-24 lg:mb-20">
-        <RatesStrip />
+        <div className={cn(
+          'rounded-2xl border overflow-hidden',
+          'bg-white dark:bg-white/[0.02]',
+          'border-stone-200 dark:border-white/[0.07]'
+        )}>
+          <div className="flex items-center justify-between px-4 lg:px-5 py-3.5 lg:py-4
+            border-b border-stone-100 dark:border-white/[0.05]">
+            <p className="text-[9px] font-bold tracking-[0.2em] uppercase
+              text-stone-400 dark:text-white/25">Live FX rates</p>
+            <span className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {ratesLoading ? 'Loading…' : 'Live'}
+            </span>
+          </div>
+          <div className="divide-y divide-stone-100 dark:divide-white/[0.04]">
+            {liveRates.map((r) => (
+              <div key={r.pair}
+                className="flex items-center justify-between px-4 lg:px-5 py-3 lg:py-3.5
+                  hover:bg-stone-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer">
+                <div className="flex items-center gap-2 lg:gap-3">
+                  <div className="flex -space-x-1">
+                    <img src={getFlag(r.pair.split('/')[0])} alt="" className="w-4 h-4 lg:w-5 lg:h-5 rounded-full border border-white dark:border-[#111] object-cover" />
+                    <img src={getFlag(r.pair.split('/')[1])} alt="" className="w-4 h-4 lg:w-5 lg:h-5 rounded-full border border-white dark:border-[#111] object-cover" />
+                  </div>
+                  <span className="text-[12px] lg:text-[13px] font-bold font-mono tracking-wide text-stone-700 dark:text-white/70">
+                    {r.pair}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 lg:gap-4">
+                  <span className="text-[12px] lg:text-[13px] font-mono tabular-nums text-stone-800 dark:text-white/80">
+                    {r.rate}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
     </div>

@@ -150,7 +150,7 @@ const Nav = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const Hero = () => {
-  const currencies = ['USD', 'GBP', 'EUR', 'NGN', 'JPY', 'CHF', 'AED', 'CAD'];
+  const currencies = ['USD', 'GBP', 'EUR', 'JPY', 'CHF', 'AED', 'CAD', 'SGD'];
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
@@ -211,11 +211,19 @@ const Hero = () => {
           {/* Social proof */}
           <div className="flex items-center gap-3 mb-10">
             <div className="flex -space-x-2">
-              {['from-sky-500 to-blue-600','from-violet-500 to-purple-600','from-emerald-500 to-teal-600'].map((g, i) => (
+              {[
+                { g: 'from-sky-500 to-blue-600',     i: 'A' },
+                { g: 'from-violet-500 to-purple-600', i: 'J' },
+                { g: 'from-emerald-500 to-teal-600',  i: 'S' },
+              ].map(({ g, i }) => (
                 <div key={i} className={cn(
                   'w-7 h-7 rounded-full ring-2 ring-[#F5F3EF] dark:ring-[#0A0A0B]',
+                  'flex items-center justify-center',
+                  'text-white text-[10px] font-bold',
                   `bg-gradient-to-br ${g}`
-                )} />
+                )}>
+                  {i}
+                </div>
               ))}
             </div>
             <div className="flex items-center gap-1">
@@ -263,7 +271,6 @@ const CURRENCIES_LIST = [
   { code: 'USD', name: 'US Dollar',         sym: '$'  },
   { code: 'GBP', name: 'British Pound',     sym: '£'  },
   { code: 'EUR', name: 'Euro',              sym: '€'  },
-  { code: 'NGN', name: 'Nigerian Naira',    sym: '₦' },
   { code: 'JPY', name: 'Japanese Yen',      sym: '¥'  },
   { code: 'CAD', name: 'Canadian Dollar',   sym: 'CA$' },
   { code: 'AED', name: 'UAE Dirham',        sym: 'د.إ' },
@@ -375,7 +382,7 @@ const FeaturesSection = () => (
     <FeatureBlock
       tag="Multi-currency accounts"
       headline={<>Hold <em style={{ fontStyle:'normal', color:'#C9A84C' }}>every</em> currency<br />you work in.</>}
-      body="Open USD, GBP, EUR, NGN and 30+ currency accounts instantly. Real balances, real IBANs, not just conversion wrappers. Your money lives where you need it."
+      body="Open USD, GBP, EUR, CHF and 30+ currency accounts instantly. Real balances, real IBANs, not just conversion wrappers. Your money lives where you need it."
       imgSrc="https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1400&q=95&auto=format&fit=crop"
       imgAlt="Person managing multiple currency accounts on phone"
       cta="Open your first account"
@@ -385,7 +392,7 @@ const FeaturesSection = () => (
       tag="Global transfers"
       headline={<>Send money.<br />Land in minutes.</>}
       body="SWIFT, SEPA, ACH or Stonegate-to-Stonegate. Transfers to 185 countries at 0.5% with no hidden markups. Your recipient gets notified instantly."
-      imgSrc="https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=1400&q=95&auto=format&fit=crop"
+      imgSrc="https://i.pinimg.com/1200x/27/1a/58/271a586ccaaf3ee7c354089c625ce0b3.jpg"
       imgAlt="Global money transfer"
       reverse
       cta="See transfer fees"
@@ -404,7 +411,7 @@ const FeaturesSection = () => (
       tag="Currency exchange"
       headline={<>Convert at the<br />real rate.</>}
       body="We use the mid-market rate, the same one banks use with each other, not the inflated tourist rate. No rate markups, ever."
-      imgSrc="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1400&q=95&auto=format&fit=crop"
+      imgSrc="https://i.pinimg.com/736x/ac/99/1b/ac991bc392028e021f2ed97e19b52d07.jpg"
       imgAlt="Live currency exchange rates"
       reverse
       cta="See live rates"
@@ -581,7 +588,7 @@ const AppPreview = () => {
             <div className="flex items-center justify-between px-5 py-3
               border-b border-white/[0.06]">
               <span className="text-[11px] font-bold text-white/30 font-mono">
-                NEXUS PRIVATE
+                STONEGATE
               </span>
               <LogoMark size={18} />
             </div>
@@ -606,7 +613,7 @@ const AppPreview = () => {
                 { code:'USD', sym:'$',  val:'14,250', up:true  },
                 { code:'GBP', sym:'£',  val:'2,100',  up:true  },
                 { code:'EUR', sym:'€',  val:'3,800',  up:false },
-                { code:'NGN', sym:'₦', val:'850K',   up:false },
+                { code:'CHF', sym:'Fr', val:'5,200',  up:true  },
               ].map(c => (
                 <div key={c.code} className="px-4 py-4">
                   <p className="text-[9px] font-bold tracking-[0.12em] uppercase
@@ -900,6 +907,49 @@ const FinalCTA = () => (
 // FOOTER
 // ─────────────────────────────────────────────────────────────────────────────
 
+type FooterLink =
+  | { label: string; to: string }
+  | { label: string; href: string };
+
+const FOOTER_GROUPS: { heading: string; links: FooterLink[] }[] = [
+  {
+    heading: 'Product',
+    links: [
+      { label: 'Features',   href: '#features' },
+      { label: 'Pricing',    href: '#pricing'  },
+      { label: 'Cards',      to:   '/cards'    },
+      { label: 'Send money', to:   '/send'     },
+      { label: 'Convert',    to:   '/swap'     },
+    ],
+  },
+  {
+    heading: 'Account',
+    links: [
+      { label: 'Sign in',      to: '/login'        },
+      { label: 'Get started',  to: '/signup'       },
+      { label: 'Dashboard',    to: '/dashboard'    },
+      { label: 'Transactions', to: '/transactions' },
+    ],
+  },
+  {
+    heading: 'Legal',
+    links: [
+      { label: 'Privacy Policy', to: '/privacy' },
+      { label: 'Terms of Use',   to: '/terms'   },
+      { label: 'Cookies',        to: '/cookies' },
+    ],
+  },
+  {
+    heading: 'Support',
+    links: [
+      { label: 'Contact us', to: '/contact' },
+      { label: 'FAQs',       to: '/faq'    },
+    ],
+  },
+];
+
+const linkCls = 'text-[13px] text-stone-500 dark:text-white/35 hover:text-stone-900 dark:hover:text-white/65 transition-colors';
+
 const Footer = () => (
   <footer className="bg-stone-100 dark:bg-[#0A0A0B] border-t border-stone-200 dark:border-white/[0.05]">
     <div className="max-w-[1160px] mx-auto px-5 sm:px-8 py-14 sm:py-18">
@@ -913,22 +963,18 @@ const Footer = () => (
             Private banking for a borderless world.
           </p>
         </div>
-        {[
-          { heading:'Product', links:['Features','Pricing','Cards','API docs','Changelog'] },
-          { heading:'Company', links:['About','Blog','Careers','Press','Contact']          },
-          { heading:'Legal',   links:['Privacy','Terms','Cookies','Compliance','Licenses'] },
-          { heading:'Support', links:['Help centre','Status','Community','Partners','FAQs']},
-        ].map(g => (
+        {FOOTER_GROUPS.map(g => (
           <div key={g.heading}>
             <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-stone-400 dark:text-white/20 mb-4">
               {g.heading}
             </p>
             <div className="space-y-2.5">
               {g.links.map(l => (
-                <p key={l}>
-                  <a href="#" className="text-[13px] text-stone-500 dark:text-white/35 hover:text-stone-900 dark:hover:text-white/65 transition-colors">
-                    {l}
-                  </a>
+                <p key={l.label}>
+                  {'to' in l
+                    ? <Link to={l.to} className={linkCls}>{l.label}</Link>
+                    : <a href={l.href} className={linkCls}>{l.label}</a>
+                  }
                 </p>
               ))}
             </div>

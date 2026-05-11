@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
   Globe,
@@ -107,16 +109,58 @@ const LogoMark = () => (
 // NOTIFICATION DROPDOWN
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NOTIFICATIONS = [
-  { title: 'Transfer received', sub: '$1,200.00 from James O.', time: '2m ago',  dot: true  },
-  { title: 'FX rate alert',     sub: '1 USD = 1,620 NGN',       time: '1h ago',  dot: true  },
-  { title: 'Statement ready',   sub: 'March 2025 summary',       time: '1d ago',  dot: false },
-];
+interface DBNotif {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  read: boolean;
+  created_at: string;
+}
+
+function timeAgo(iso: string): string {
+  const elapsed = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (elapsed < 1)    return 'Just now';
+  if (elapsed < 60)   return `${elapsed}m ago`;
+  if (elapsed < 1440) return `${Math.round(elapsed / 60)}h ago`;
+  return `${Math.round(elapsed / 1440)}d ago`;
+}
 
 const NotifDropdown = () => {
+  const { user }          = useAuth();
   const [open, setOpen]   = useState(false);
+  const [notifs, setNotifs] = useState<DBNotif[]>([]);
   const ref               = useRef<HTMLDivElement>(null);
-  const unread            = NOTIFICATIONS.filter(n => n.dot).length;
+  const unread            = notifs.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => setNotifs((data ?? []) as DBNotif[]));
+
+    const channel = supabase
+      .channel(`notifs-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, payload => {
+        setNotifs(prev => [payload.new as DBNotif, ...prev]);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
+  const markAllRead = async () => {
+    if (!user) return;
+    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id);
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -173,13 +217,17 @@ const NotifDropdown = () => {
               )}
             </div>
 
-            {NOTIFICATIONS.map((n, i) => (
-              <div key={i}
+            {notifs.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <p className="text-[11px] text-stone-400 dark:text-white/25">No notifications</p>
+              </div>
+            ) : notifs.map((n) => (
+              <div key={n.id}
                 className="flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors
                   border-b border-stone-50 dark:border-white/[0.03] last:border-0
                   hover:bg-stone-50 dark:hover:bg-white/[0.03]">
                 <div className="mt-1 shrink-0">
-                  {n.dot
+                  {!n.read
                     ? <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] block" />
                     : <span className="w-1.5 h-1.5 block" />
                   }
@@ -189,19 +237,23 @@ const NotifDropdown = () => {
                     text-stone-800 dark:text-white/80">
                     {n.title}
                   </p>
-                  <p className="text-[11px] mt-0.5 text-stone-400 dark:text-white/30">{n.sub}</p>
+                  <p className="text-[11px] mt-0.5 text-stone-400 dark:text-white/30">{n.body}</p>
                 </div>
                 <span className="text-[10px] font-mono text-stone-300 dark:text-white/20 shrink-0">
-                  {n.time}
+                  {timeAgo(n.created_at)}
                 </span>
               </div>
             ))}
 
-            <div className="px-4 py-2.5 bg-stone-50 dark:bg-white/[0.02]">
-              <button className="text-[11px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
-                Mark all as read
-              </button>
-            </div>
+            {notifs.length > 0 && (
+              <div className="px-4 py-2.5 bg-stone-50 dark:bg-white/[0.02]">
+                <button
+                  onClick={markAllRead}
+                  className="text-[11px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
+                  Mark all as read
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -303,6 +355,16 @@ const MobileDrawer = ({
   setLanguage: (c: LanguageCode) => void;
 }) => {
   const location = useLocation();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
+  const displayName = profile?.full_name ?? 'Account';
+  const initial = displayName[0]?.toUpperCase() ?? '?';
+
+  const handleSignOut = async () => {
+    onClose();
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   // Lock body scroll when open
   useEffect(() => {
@@ -378,10 +440,10 @@ const MobileDrawer = ({
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-8 h-8 rounded-full bg-black/20 flex items-center justify-center
                       text-[#C9A84C] text-[12px] font-bold bg-white/20">
-                      V
+                      {initial}
                     </div>
                     <div>
-                      <p className="text-[12px] font-bold text-white leading-none">Victor Okafor</p>
+                      <p className="text-[12px] font-bold text-white leading-none">{displayName}</p>
                       <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/60 mt-0.5">
                         Premium
                       </p>
@@ -535,7 +597,9 @@ const MobileDrawer = ({
                   <span className="text-[13px] font-medium">Settings</span>
                 </button>
 
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors
                   text-red-400/70 hover:text-red-500
                   hover:bg-red-50 dark:hover:bg-red-500/[0.06]">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0
@@ -588,6 +652,9 @@ const HamburgerIcon = ({ open }: { open: boolean }) => (
 export const Navbar = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { language, setLanguage }   = useLanguage();
+  const { profile }                 = useAuth();
+  const navFirstName = profile?.full_name?.split(' ')[0] ?? 'You';
+  const navInitial   = navFirstName[0]?.toUpperCase() ?? '?';
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -621,7 +688,7 @@ export const Navbar = () => {
             <h1 className="text-[14px] font-medium tracking-[-0.2px] truncate
               text-stone-500 dark:text-white/40">
               {getGreeting()},{' '}
-              <span className="text-stone-900 dark:text-white font-semibold">Victor</span>
+              <span className="text-stone-900 dark:text-white font-semibold">{navFirstName}</span>
             </h1>
             <p className="hidden md:block text-[11px] mt-0.5 font-mono tracking-wide
               text-stone-400 dark:text-white/20">
@@ -657,7 +724,7 @@ export const Navbar = () => {
               'text-[#0C0C0D] text-[11px] font-bold',
               'shadow-sm shadow-[#C9A84C]/20'
             )}>
-              V
+              {navInitial}
             </div>
 
             {/* Hamburger — mobile only */}

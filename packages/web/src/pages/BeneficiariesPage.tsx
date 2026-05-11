@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -16,8 +16,10 @@ import {
   AlertCircle,
   SlidersHorizontal,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { getFlag } from '../lib/utils';
+import { cn, getFlag } from '../lib/utils';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import type { Beneficiary as DBBeneficiary } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -45,18 +47,43 @@ interface Beneficiary {
   note?:        string;
 }
 
-const BENEFICIARIES: Beneficiary[] = [
-  { id:'b01', type:'individual', name:'James Okonkwo',    initials:'JO', color:'from-sky-500 to-blue-600',      bank:'Zenith Bank',          accountNum:'2034567890',    currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'bank',   favourite:true,  lastSent:'2h ago',    lastAmount:'₦250,000', totalSent:'₦1.2M'   },
-  { id:'b02', type:'individual', name:'Amina Bello',      initials:'AB', color:'from-violet-500 to-purple-600', bank:'Barclays UK',           accountNum:'GB29NWBK',      currency:'GBP', country:'United Kingdom',countryCode:'GBP', method:'bank',   favourite:true,  lastSent:'Yesterday', lastAmount:'£250.00', totalSent:'£2,400'  },
-  { id:'b03', type:'individual', name:'Chioma Eze',       initials:'CE', color:'from-emerald-500 to-teal-600',  bank:'Stonegate',                 accountNum:'STG-10293',     currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'nexus',  favourite:true,  lastSent:'3d ago',    lastAmount:'₦50,000', totalSent:'₦620,000'},
-  { id:'b04', type:'individual', name:'David Mensah',     initials:'DM', color:'from-rose-500 to-pink-600',     bank:'Ecobank Ghana',         accountNum:'0024512834',    currency:'USD', country:'Ghana',         countryCode:'USD', method:'bank',   favourite:false, lastSent:'1w ago',    lastAmount:'$320.00', totalSent:'$1,800'  },
-  { id:'b05', type:'individual', name:'Fatima Al-Rashid', initials:'FA', color:'from-amber-500 to-orange-600',  bank:'Emirates NBD',          accountNum:'AE070331234',   currency:'USD', country:'UAE',           countryCode:'USD', method:'bank',   favourite:false, lastSent:'2w ago',    lastAmount:'$1,080', totalSent:'$5,200'  },
-  { id:'b06', type:'business',   name:'TechCorp Ltd.',    initials:'TC', color:'from-slate-500 to-slate-700',   bank:'JP Morgan Chase',       accountNum:'US29CHAS0001',  currency:'USD', country:'United States', countryCode:'USD', method:'bank',   favourite:true,  lastSent:'5d ago',    lastAmount:'$4,500', totalSent:'$27,000' },
-  { id:'b07', type:'individual', name:'Ngozi Adeyemi',    initials:'NA', color:'from-fuchsia-500 to-pink-600',  bank:'GTBank',                accountNum:'0198765432',    currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'bank',   favourite:false, lastSent:'3w ago',    lastAmount:'₦100,000',totalSent:'₦450,000'},
-  { id:'b08', type:'business',   name:'Freelance Hub Inc',initials:'FH', color:'from-cyan-500 to-blue-500',     bank:'Wells Fargo',           accountNum:'US99WF003471',  currency:'USD', country:'United States', countryCode:'USD', method:'bank',   favourite:false, lastSent:'1mo ago',   lastAmount:'$2,200', totalSent:'$8,800'  },
-  { id:'b09', type:'individual', name:'Kofi Asante',      initials:'KA', color:'from-lime-500 to-green-600',    bank:'Fidelity Bank',         accountNum:'6012345678',    currency:'NGN', country:'Ghana',         countryCode:'USD', method:'mobile', favourite:false, lastSent:'2mo ago',   lastAmount:'$150.00', totalSent:'$900'    },
-  { id:'b10', type:'individual', name:'Ifeoma Nwosu',     initials:'IN', color:'from-red-500 to-rose-600',      bank:'Access Bank',           accountNum:'0076543210',    currency:'NGN', country:'Nigeria',       countryCode:'NGN', method:'bank',   favourite:false, lastSent:'3mo ago',   lastAmount:'₦75,000', totalSent:'₦300,000'},
+const AVATAR_COLORS = [
+  'from-sky-500 to-blue-600', 'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600', 'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600', 'from-slate-500 to-slate-700',
+  'from-fuchsia-500 to-pink-600', 'from-cyan-500 to-blue-500',
+  'from-lime-500 to-green-600', 'from-red-500 to-rose-600',
 ];
+
+function makeInitials(name: string): string {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
+
+function colorFor(id: string): string {
+  let hash = 0;
+  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function adaptBeneficiary(db: DBBeneficiary): Beneficiary {
+  return {
+    id:          db.id,
+    type:        'individual',
+    name:        db.name,
+    initials:    makeInitials(db.name),
+    color:       colorFor(db.id),
+    bank:        db.bank_name ?? 'Bank transfer',
+    accountNum:  db.account_number ?? db.iban ?? '—',
+    currency:    db.currency,
+    country:     db.country ?? '—',
+    countryCode: db.currency,
+    method:      'bank',
+    favourite:   false,
+    lastSent:    '—',
+    lastAmount:  '—',
+    totalSent:   '—',
+  };
+}
 
 type FilterGroup = 'all' | 'favourites' | 'individual' | 'business';
 type SortOrder   = 'recent' | 'name' | 'most_sent';
@@ -781,8 +808,47 @@ const SendSheet = ({ b, onClose }: { b: Beneficiary; onClose: () => void }) => {
 // ADD BENEFICIARY SHEET
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
-  const [method, setMethod] = useState<TransferMethod>('bank');
+interface AddBeneficiaryData {
+  name: string;
+  bank_name: string;
+  account_number: string;
+  currency: string;
+  country: string;
+}
+
+const AddBeneficiarySheet = ({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (data: AddBeneficiaryData) => Promise<void>;
+}) => {
+  const [method,        setMethod]        = useState<TransferMethod>('bank');
+  const [saving,        setSaving]        = useState(false);
+  const [name,          setName]          = useState('');
+  const [bankName,      setBankName]      = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [currency,      setCurrency]      = useState('');
+  const [country,       setCountry]       = useState('');
+
+  const inputCls = cn(
+    'w-full px-3.5 py-2.5 rounded-xl border text-[13px] outline-none transition-colors',
+    'bg-stone-50 dark:bg-white/[0.02]',
+    'border-stone-200 dark:border-white/[0.08]',
+    'text-stone-900 dark:text-white',
+    'placeholder:text-stone-300 dark:placeholder:text-white/20',
+    'focus:border-[#C9A84C]/50 dark:focus:border-[#C9A84C]/40'
+  );
+
+  const canSave = name.trim() && accountNumber.trim() && currency.trim();
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    await onSave({ name: name.trim(), bank_name: bankName.trim(), account_number: accountNumber.trim(), currency: currency.trim().toUpperCase(), country: country.trim() });
+    setSaving(false);
+    onClose();
+  };
 
   return (
     <>
@@ -816,9 +882,9 @@ const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
         {/* Transfer method tabs */}
         <div className="flex gap-2 mb-5">
           {([
-            { id: 'bank'  as TransferMethod, label: 'Bank account', icon: Building2 },
-            { id: 'nexus' as TransferMethod, label: 'Stonegate wallet', icon: Globe     },
-            { id: 'mobile'as TransferMethod, label: 'Mobile money', icon: User      },
+            { id: 'bank'   as TransferMethod, label: 'Bank account',    icon: Building2 },
+            { id: 'nexus'  as TransferMethod, label: 'Stonegate wallet', icon: Globe     },
+            { id: 'mobile' as TransferMethod, label: 'Mobile money',    icon: User      },
           ]).map(m => (
             <button
               key={m.id}
@@ -842,38 +908,48 @@ const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
 
         {/* Form fields */}
         <div className="space-y-4">
-          {[
-            { label: 'Full name',         placeholder: 'Recipient full name',   type: 'text'  },
-            { label: 'Bank name',         placeholder: 'e.g. Zenith Bank',      type: 'text', show: method === 'bank' },
-            { label: method === 'nexus' ? 'Stonegate ID / email' : method === 'mobile' ? 'Phone number' : 'Account number',
-              placeholder: method === 'nexus' ? 'user@stonegate.bank' : method === 'mobile' ? '+234 800 000 0000' : '0123456789',
-              type: method === 'mobile' ? 'tel' : 'text' },
-            { label: 'Currency',          placeholder: 'USD, NGN, GBP…',         type: 'text'  },
-            { label: 'Country',           placeholder: 'Nigeria, UK, USA…',       type: 'text'  },
-            { label: 'Note (optional)',   placeholder: 'e.g. Landlord',           type: 'text'  },
-          ].filter(f => f.show !== false).map(f => (
-            <div key={f.label}>
-              <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">
-                {f.label}
-              </label>
-              <input
-                type={f.type}
-                placeholder={f.placeholder}
-                className={cn(
-                  'w-full px-3.5 py-2.5 rounded-xl border text-[13px] outline-none transition-colors',
-                  'bg-stone-50 dark:bg-white/[0.02]',
-                  'border-stone-200 dark:border-white/[0.08]',
-                  'text-stone-900 dark:text-white',
-                  'placeholder:text-stone-300 dark:placeholder:text-white/20',
-                  'focus:border-[#C9A84C]/50 dark:focus:border-[#C9A84C]/40'
-                )}
-              />
+          <div>
+            <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">Full name</label>
+            <input type="text" placeholder="Recipient full name" value={name} onChange={e => setName(e.target.value)} className={inputCls} />
+          </div>
+          {method === 'bank' && (
+            <div>
+              <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">Bank name</label>
+              <input type="text" placeholder="e.g. Zenith Bank" value={bankName} onChange={e => setBankName(e.target.value)} className={inputCls} />
             </div>
-          ))}
+          )}
+          <div>
+            <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">
+              {method === 'nexus' ? 'Stonegate ID / email' : method === 'mobile' ? 'Phone number' : 'Account number'}
+            </label>
+            <input
+              type={method === 'mobile' ? 'tel' : 'text'}
+              placeholder={method === 'nexus' ? 'user@stonegate.bank' : method === 'mobile' ? '+1 800 000 0000' : '0123456789'}
+              value={accountNumber}
+              onChange={e => setAccountNumber(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">Currency</label>
+            <input type="text" placeholder="USD, GBP, EUR…" value={currency} onChange={e => setCurrency(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">Country</label>
+            <input type="text" placeholder="United States, UK…" value={country} onChange={e => setCountry(e.target.value)} className={inputCls} />
+          </div>
 
-          <button className="w-full py-3.5 rounded-xl text-[13px] font-bold transition-all
-            bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558] shadow-md shadow-[#C9A84C]/20">
-            Save beneficiary
+          <button
+            disabled={!canSave || saving}
+            onClick={handleSave}
+            className={cn(
+              'w-full py-3.5 rounded-xl text-[13px] font-bold transition-all',
+              canSave && !saving
+                ? 'bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558] shadow-md shadow-[#C9A84C]/20'
+                : 'bg-stone-100 dark:bg-white/[0.04] text-stone-300 dark:text-white/20 cursor-not-allowed'
+            )}
+          >
+            {saving ? 'Saving…' : 'Save beneficiary'}
           </button>
         </div>
       </div>
@@ -886,7 +962,9 @@ const AddBeneficiarySheet = ({ onClose }: { onClose: () => void }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BeneficiariesPage = () => {
-  const [beneficiaries,   setBeneficiaries]   = useState(BENEFICIARIES);
+  const { user } = useAuth();
+  const [beneficiaries,   setBeneficiaries]   = useState<Beneficiary[]>([]);
+  const [loading,         setLoading]         = useState(true);
   const [search,          setSearch]          = useState('');
   const [filterGroup,     setFilterGroup]     = useState<FilterGroup>('all');
   const [sortOrder,       setSortOrder]       = useState<SortOrder>('recent');
@@ -896,13 +974,40 @@ const BeneficiariesPage = () => {
   const [showAdd,         setShowAdd]         = useState(false);
   const [showSort,        setShowSort]        = useState(false);
 
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    supabase
+      .from('beneficiaries')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setBeneficiaries((data ?? []).map(adaptBeneficiary));
+        setLoading(false);
+      });
+  }, [user?.id]);
+
   const handleToggleFav = (id: string) => {
     setBeneficiaries(prev => prev.map(b => b.id === id ? { ...b, favourite: !b.favourite } : b));
     if (selectedB?.id === id) setSelectedB(prev => prev ? { ...prev, favourite: !prev.favourite } : null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     setBeneficiaries(prev => prev.filter(b => b.id !== id));
+    await supabase.from('beneficiaries').delete().eq('id', id);
+  };
+
+  const handleAdd = async (data: AddBeneficiaryData) => {
+    if (!user) return;
+    const { data: inserted } = await supabase
+      .from('beneficiaries')
+      .insert({ user_id: user.id, ...data })
+      .select()
+      .single();
+    if (inserted) {
+      setBeneficiaries(prev => [adaptBeneficiary(inserted), ...prev]);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -951,9 +1056,9 @@ const BeneficiariesPage = () => {
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2.5 mb-6 lg:mb-8">
         {[
-          { label: 'Total saved',   value: String(beneficiaries.length), sub: 'recipients',         accent: true },
-          { label: 'Favourites',    value: String(favourites.length),    sub: 'quick access'                     },
-          { label: 'Countries',     value: String(new Set(beneficiaries.map(b => b.country)).size), sub: 'covered' },
+          { label: 'Total saved',   value: loading ? '…' : String(beneficiaries.length), sub: 'recipients',         accent: true },
+          { label: 'Favourites',    value: loading ? '…' : String(favourites.length),    sub: 'quick access'                     },
+          { label: 'Countries',     value: loading ? '…' : String(new Set(beneficiaries.map(b => b.country)).size), sub: 'covered' },
         ].map(s => (
           <div key={s.label} className={cn(
             'rounded-2xl border p-3.5 lg:p-4 flex flex-col gap-2',
@@ -1163,12 +1268,22 @@ const BeneficiariesPage = () => {
 
       {/* Results count */}
       <SectionRule
-        label={`${filtered.length} beneficiar${filtered.length !== 1 ? 'ies' : 'y'}`}
+        label={loading ? 'Loading…' : `${filtered.length} beneficiar${filtered.length !== 1 ? 'ies' : 'y'}`}
         action={{ text: '+ Add new', onClick: () => setShowAdd(true) }}
       />
 
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {[0,1,2].map(i => (
+            <div key={i} className="rounded-2xl border border-stone-200 dark:border-white/[0.07]
+              bg-white dark:bg-white/[0.02] h-[220px] animate-pulse" />
+          ))}
+        </div>
+      )}
+
       {/* Empty state */}
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className={cn(
           'rounded-2xl border p-12 text-center',
           'bg-white dark:bg-white/[0.02]',
@@ -1190,7 +1305,7 @@ const BeneficiariesPage = () => {
       )}
 
       {/* Grid view */}
-      {viewMode === 'grid' && filtered.length > 0 && (
+      {!loading && viewMode === 'grid' && filtered.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map(b => (
             <BeneficiaryCard
@@ -1205,7 +1320,7 @@ const BeneficiariesPage = () => {
       )}
 
       {/* List view */}
-      {viewMode === 'list' && filtered.length > 0 && (
+      {!loading && viewMode === 'list' && filtered.length > 0 && (
         <div className={cn(
           'rounded-2xl border overflow-hidden',
           'bg-white dark:bg-white/[0.02]',
@@ -1246,7 +1361,7 @@ const BeneficiariesPage = () => {
       )}
 
       {showAdd && (
-        <AddBeneficiarySheet onClose={() => setShowAdd(false)} />
+        <AddBeneficiarySheet onClose={() => setShowAdd(false)} onSave={handleAdd} />
       )}
     </div>
   );
