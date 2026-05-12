@@ -55,8 +55,8 @@ export const Sidebar = () => {
   const location  = useLocation();
   const navigate  = useNavigate();
   const [showMore, setShowMore] = useState(false);
-  const { profile, signOut }   = useAuth();
-  const displayName = profile?.full_name ?? 'Account';
+  const { profile, signOut, user } = useAuth();
+  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Account';
   const initial     = displayName[0]?.toUpperCase() ?? '?';
 
   const handleSignOut = async () => {

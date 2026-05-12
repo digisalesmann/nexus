@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   ArrowLeftRight,
   TrendingUp,
@@ -19,6 +19,8 @@ import { useWallets } from '../hooks/useWallets';
 import { useAuth } from '../context/AuthContext';
 import { getRate as liveGetRate } from '../lib/api/fx';
 import { supabase } from '../lib/supabase';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Transaction } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -60,12 +62,14 @@ const SPARKLINES: Record<string, number[]> = {
 const FEE_PERCENT  = 0.005;
 const QUICK_AMOUNTS = [100, 500, 1000, 5000];
 
-const RECENT_CONVERSIONS = [
-  { from: 'USD', to: 'EUR', fromAmt: '$500.00',   toAmt: '€462.05',  rate: '0.9241',  date: '2h ago'    },
-  { from: 'GBP', to: 'EUR', fromAmt: '£400.00',   toAmt: '€465.20',  rate: '1.1630',  date: 'Yesterday' },
-  { from: 'USD', to: 'GBP', fromAmt: '$1,200.00', toAmt: '£949.44',  rate: '0.7912',  date: '3d ago'    },
-  { from: 'EUR', to: 'CAD', fromAmt: '€800.00',   toAmt: 'CA$1,178', rate: '1.4726',  date: '5d ago'    },
-];
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1)    return 'Just now';
+  if (mins < 60)   return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 10080) return `${Math.round(mins / 1440)}d ago`;
+  return `${Math.round(mins / 10080)}w ago`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -335,48 +339,55 @@ const FeeRow = ({ label, value, muted, accent, bold }: {
 // RECENT CONVERSION ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RecentConversionRow = ({ item }: { item: typeof RECENT_CONVERSIONS[0] }) => (
-  <div className="flex items-center gap-3 py-3.5
-    border-b border-stone-100 dark:border-white/[0.04] last:border-0
-    hover:bg-stone-50 dark:hover:bg-white/[0.02]
-    -mx-2 px-2 rounded-xl transition-colors cursor-pointer group">
+const RecentConversionRow = ({ tx }: { tx: Transaction }) => {
+  const from  = tx.from_currency ?? '—';
+  const to    = tx.to_currency   ?? '—';
+  const fromC = CURRENCIES.find(c => c.code === from);
+  const toC   = CURRENCIES.find(c => c.code === to);
+  const fromSym = fromC?.symbol ?? from;
+  const toSym   = toC?.symbol   ?? to;
+  const rate = tx.rate != null
+    ? (tx.rate >= 100 ? tx.rate.toFixed(2) : tx.rate.toFixed(4))
+    : '—';
+  return (
+    <div className="flex items-center gap-3 py-3.5
+      border-b border-stone-100 dark:border-white/[0.04] last:border-0
+      hover:bg-stone-50 dark:hover:bg-white/[0.02]
+      -mx-2 px-2 rounded-xl transition-colors cursor-pointer group">
 
-    {/* Overlapping flags */}
-    <div className="flex items-center shrink-0">
-      <img src={getFlag(item.from)} alt={item.from}
-        className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-[#111] relative z-10" />
-      <img src={getFlag(item.to)} alt={item.to}
-        className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-[#111] -ml-2.5" />
+      <div className="flex items-center shrink-0">
+        <img src={getFlag(from)} alt={from}
+          className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-[#111] relative z-10" />
+        <img src={getFlag(to)} alt={to}
+          className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-[#111] -ml-2.5" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-bold leading-none tracking-[-0.2px] truncate
+          text-stone-800 dark:text-white/80">
+          {from} → {to}
+        </p>
+        <p className="text-[10px] font-mono mt-0.5 text-stone-400 dark:text-white/25">
+          Rate {rate}
+        </p>
+      </div>
+
+      <div className="text-right shrink-0">
+        <p className="text-[12px] font-mono font-medium tabular-nums leading-none
+          text-stone-800 dark:text-white/80">
+          {toSym}{(tx.to_amount ?? 0).toLocaleString('en', { minimumFractionDigits: 2 })}
+        </p>
+        <p className="text-[10px] font-mono mt-0.5 text-stone-400 dark:text-white/25">
+          {fromSym}{(tx.from_amount ?? 0).toLocaleString('en', { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+
+      <p className="text-[10px] font-mono text-stone-300 dark:text-white/20 shrink-0 hidden sm:block">
+        {timeAgo(tx.created_at)}
+      </p>
     </div>
-
-    {/* Pair + rate */}
-    <div className="flex-1 min-w-0">
-      <p className="text-[13px] font-bold leading-none tracking-[-0.2px] truncate
-        text-stone-800 dark:text-white/80">
-        {item.from} → {item.to}
-      </p>
-      <p className="text-[10px] font-mono mt-0.5 text-stone-400 dark:text-white/25">
-        Rate {item.rate}
-      </p>
-    </div>
-
-    {/* Amounts */}
-    <div className="text-right shrink-0">
-      <p className="text-[12px] font-mono font-medium tabular-nums leading-none
-        text-stone-800 dark:text-white/80">
-        {item.toAmt}
-      </p>
-      <p className="text-[10px] font-mono mt-0.5 text-stone-400 dark:text-white/25">
-        {item.fromAmt}
-      </p>
-    </div>
-
-    {/* Date — only on sm+ */}
-    <p className="text-[10px] font-mono text-stone-300 dark:text-white/20 shrink-0 hidden sm:block">
-      {item.date}
-    </p>
-  </div>
-);
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AMOUNT INPUT FIELD
@@ -445,6 +456,11 @@ export const SwapPage = () => {
   const { user }                             = useAuth();
   const { rates, loading: ratesLoading, refresh: refreshRates } = useFxRates();
   const { wallets, reload: reloadWallets }   = useWallets();
+  const { transactions }                     = useTransactions(20);
+
+  const recentSwaps = useMemo(() =>
+    transactions.filter(tx => tx.type === 'swap'),
+  [transactions]);
 
   // Build currency list from real wallets + supplement with zero-balance options
   const buildCurrencies = (): Currency[] => {
@@ -997,8 +1013,12 @@ export const SwapPage = () => {
           'border-stone-200 dark:border-white/[0.07]'
         )}>
           <div className="px-3 sm:px-4 py-1">
-            {RECENT_CONVERSIONS.map((item, i) => (
-              <RecentConversionRow key={i} item={item} />
+            {recentSwaps.length === 0 ? (
+              <p className="py-6 text-center text-[12px] text-stone-400 dark:text-white/25 font-mono">
+                No conversions yet
+              </p>
+            ) : recentSwaps.map(tx => (
+              <RecentConversionRow key={tx.id} tx={tx} />
             ))}
           </div>
         </div>

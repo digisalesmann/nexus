@@ -11,6 +11,7 @@ import {
 import { cn } from '../lib/utils';
 import { getFlag, CURRENCY_SYMBOLS } from '../lib/utils';
 import { useTransactions } from '../hooks/useTransactions';
+import { useWallets } from '../hooks/useWallets';
 import { useFxRates } from '../hooks/useFxRates';
 import { getRate } from '../lib/api/fx';
 import { useAuth } from '../context/AuthContext';
@@ -51,20 +52,73 @@ const SectionRule = ({
 const CHART_PERIODS = ['1W', '1M', '3M', '6M', '1Y', 'ALL'] as const;
 type Period = (typeof CHART_PERIODS)[number];
 
-const CHART_DATA: Record<Period, number[]> = {
-  '1W':  [98, 102, 99, 104, 101, 107, 106],
-  '1M':  [88, 91, 89, 94, 97, 93, 99, 102, 98, 104, 101, 107, 106, 110, 108, 113, 111, 116, 114, 119, 117, 121, 118, 123, 120, 125, 122, 127, 124, 130],
-  '3M':  [75, 79, 77, 83, 80, 87, 84, 90, 88, 94, 91, 98, 95, 101, 99, 105, 103, 108, 106, 112, 110, 115, 113, 118, 116, 121, 119, 124, 122, 127, 125, 130, 128, 133, 131, 136, 134, 138, 136, 140, 138, 143, 141, 146, 144, 148, 146, 150, 148, 153, 151, 155, 153, 157, 155, 159, 157, 161, 159, 163, 161, 165, 163, 167, 165, 168, 167, 170, 168, 172, 171, 174, 172, 176, 174, 177, 176, 179, 177, 181, 179, 183, 181, 185, 183, 186, 184, 188, 186, 189],
-  '6M':  Array.from({ length: 120 }, (_, i) => 70 + i * 0.8 + Math.sin(i * 0.3) * 8),
-  '1Y':  Array.from({ length: 180 }, (_, i) => 60 + i * 0.6 + Math.sin(i * 0.2) * 10),
-  'ALL': Array.from({ length: 240 }, (_, i) => 40 + i * 0.55 + Math.sin(i * 0.15) * 14),
+const PERIOD_POINTS: Record<Period, number> = {
+  '1W': 7, '1M': 30, '3M': 30, '6M': 26, '1Y': 26, 'ALL': 24,
+};
+const PERIOD_MS: Record<Period, number> = {
+  '1W':  7  * 86400_000,
+  '1M':  30 * 86400_000,
+  '3M':  90 * 86400_000,
+  '6M': 180 * 86400_000,
+  '1Y': 365 * 86400_000,
+  'ALL': 3 * 365 * 86400_000,
 };
 
-const PortfolioChart = () => {
+function buildPortfolioData(txs: Transaction[], period: Period, currentTotal: number): number[] {
+  const n   = PERIOD_POINTS[period];
+  const now = Date.now();
+  const ms  = PERIOD_MS[period];
+  const start = now - ms;
+
+  // Only use transactions within the period
+  const relevant = txs.filter(tx => new Date(tx.created_at).getTime() >= start);
+  if (relevant.length === 0) return Array(n).fill(currentTotal);
+
+  // Build bucket running balances by rewinding from currentTotal
+  // Sort ascending (oldest first)
+  const sorted = [...relevant].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  // Map each tx to its signed USD delta (from the account's perspective)
+  const deltas = sorted.map(tx => {
+    const amt = tx.from_amount ?? tx.to_amount ?? 0;
+    if (tx.type === 'deposit' || tx.type === 'transfer_in') return +amt;
+    if (tx.type === 'withdrawal' || tx.type === 'transfer_out') return -amt;
+    // swap: net zero for portfolio total
+    return 0;
+  });
+
+  // Compute cumulative sum going forward, starting from (currentTotal - total of all deltas)
+  const totalDelta = deltas.reduce((s, d) => s + d, 0);
+  const baseBalance = currentTotal - totalDelta;
+
+  // Build one data point per bucket (n evenly spaced points over the period)
+  const bucketMs = ms / (n - 1);
+  const points: number[] = [];
+  let running = baseBalance;
+  let txIdx = 0;
+
+  for (let i = 0; i < n; i++) {
+    const bucketTime = start + i * bucketMs;
+    while (txIdx < sorted.length && new Date(sorted[txIdx].created_at).getTime() <= bucketTime) {
+      running += deltas[txIdx];
+      txIdx++;
+    }
+    points.push(Math.max(0, running));
+  }
+
+  return points;
+}
+
+const PortfolioChart = ({ txs, totalUSD }: { txs: Transaction[]; totalUSD: number }) => {
   const [period, setPeriod]   = useState<Period>('1M');
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const data = CHART_DATA[period];
+  const data = useMemo(
+    () => buildPortfolioData(txs, period, totalUSD),
+    [txs, period, totalUSD]
+  );
   const W = 800, H = 160;
   const pad = { t: 10, b: 20, l: 0, r: 0 };
   const iW  = W - pad.l - pad.r;
@@ -84,7 +138,7 @@ const PortfolioChart = () => {
 
   const lastVal   = data[data.length - 1];
   const firstVal  = data[0];
-  const pctChange = (((lastVal - firstVal) / firstVal) * 100).toFixed(2);
+  const pctChange = firstVal > 0 ? (((lastVal - firstVal) / firstVal) * 100).toFixed(2) : '0.00';
   const isUp      = lastVal >= firstVal;
 
   const hoverVal = hoverIdx !== null ? data[hoverIdx] : lastVal;
@@ -533,8 +587,13 @@ const LIVE_PAIRS = [
 
 const OverviewPage = () => {
   const { user }                             = useAuth();
-  const { transactions, loading: txLoading } = useTransactions(20);
+  const { transactions, loading: txLoading } = useTransactions(200);
   const { rates, loading: ratesLoading }     = useFxRates();
+  const { wallets }                          = useWallets();
+  const totalUSD = useMemo(
+    () => wallets.reduce((s, w) => s + w.balance, 0),
+    [wallets]
+  );
   const [beneficiaries, setBeneficiaries]    = useState<Beneficiary[]>([]);
 
   useEffect(() => {
@@ -581,7 +640,7 @@ const OverviewPage = () => {
 
       {/* Portfolio chart */}
       <SectionRule label="Portfolio performance" />
-      <PortfolioChart />
+      <PortfolioChart txs={transactions} totalUSD={totalUSD} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] xl:grid-cols-[1fr_340px] gap-5 lg:gap-6 mb-8 lg:mb-14">
 

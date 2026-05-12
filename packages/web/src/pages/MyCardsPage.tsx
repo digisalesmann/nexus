@@ -28,6 +28,7 @@ import { CURRENCY_SYMBOLS } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useTransactions } from '../hooks/useTransactions';
+import { useWallets } from '../hooks/useWallets';
 import type { Transaction } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -796,6 +797,8 @@ const CardSettingsSheet = ({ card, onClose, onFreeze }: {
 
 const AddCardSheet = ({ onClose }: { onClose: () => void }) => {
   const [type, setType] = useState<'virtual' | 'physical'>('virtual');
+  const { wallets } = useWallets();
+  const [linkedWalletId, setLinkedWalletId] = useState<string>('');
 
   return (
     <>
@@ -872,9 +875,8 @@ const AddCardSheet = ({ onClose }: { onClose: () => void }) => {
         )}
 
         {[
-          { label: 'Card label',     placeholder: 'e.g. Shopping card',    type: 'text'  },
-          { label: 'Linked account', placeholder: 'USD · $14,250.60',      type: 'text'  },
-          { label: 'Spending limit', placeholder: '$5,000.00',             type: 'number'},
+          { label: 'Card label',     placeholder: 'e.g. Shopping card', type: 'text'   },
+          { label: 'Spending limit', placeholder: '$5,000.00',          type: 'number' },
         ].map(f => (
           <div key={f.label} className="mb-4">
             <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">
@@ -897,6 +899,45 @@ const AddCardSheet = ({ onClose }: { onClose: () => void }) => {
             />
           </div>
         ))}
+
+        {/* Linked account — real wallet selector */}
+        <div className="mb-4">
+          <label className="text-[11px] font-bold text-stone-500 dark:text-white/40 mb-1.5 block">
+            Linked account
+          </label>
+          {wallets.length === 0 ? (
+            <div className={cn(
+              'w-full px-3.5 py-2.5 rounded-xl border text-[13px]',
+              'bg-stone-50 dark:bg-white/[0.02]',
+              'border-stone-200 dark:border-white/[0.08]',
+              'text-stone-300 dark:text-white/20'
+            )}>
+              Loading wallets…
+            </div>
+          ) : (
+            <select
+              value={linkedWalletId || (wallets[0]?.id ?? '')}
+              onChange={e => setLinkedWalletId(e.target.value)}
+              className={cn(
+                'w-full px-3.5 py-2.5 rounded-xl border text-[13px] outline-none transition-colors appearance-none',
+                'bg-stone-50 dark:bg-white/[0.02]',
+                'border-stone-200 dark:border-white/[0.08]',
+                'text-stone-900 dark:text-white',
+                'focus:border-[#C9A84C]/50 dark:focus:border-[#C9A84C]/40'
+              )}
+            >
+              {wallets.map(w => {
+                const sym = CURRENCY_SYMBOLS[w.currency] ?? '';
+                const bal = w.balance.toLocaleString('en', { minimumFractionDigits: 2 });
+                return (
+                  <option key={w.id} value={w.id} className="bg-white dark:bg-[#161618]">
+                    {w.currency} · {sym}{bal}
+                  </option>
+                );
+              })}
+            </select>
+          )}
+        </div>
 
         <button className="w-full py-3.5 rounded-xl text-[13px] font-bold transition-all
           bg-[#C9A84C] text-[#0C0C0D] hover:bg-[#D4B558]

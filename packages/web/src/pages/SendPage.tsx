@@ -22,6 +22,17 @@ import { useAuth } from '../context/AuthContext';
 import { useWallets } from '../hooks/useWallets';
 import { supabase } from '../lib/supabase';
 import { CURRENCY_SYMBOLS } from '../lib/utils';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Transaction } from '../lib/types';
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1)     return 'Just now';
+  if (mins < 60)    return `${mins}m ago`;
+  if (mins < 1440)  return `${Math.round(mins / 60)}h ago`;
+  if (mins < 10080) return `${Math.round(mins / 1440)}d ago`;
+  return `${Math.round(mins / 10080)}w ago`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES & DATA
@@ -915,6 +926,7 @@ type Step = 'select' | 'amount' | 'review' | 'success';
 const SendPage = () => {
   const { user }                    = useAuth();
   const { wallets, reload: reloadWallets } = useWallets();
+  const { transactions }            = useTransactions(10);
 
   // Build live accounts from wallets
   const liveAccounts: Account[] = wallets.length > 0
@@ -1374,39 +1386,44 @@ const SendPage = () => {
               'bg-white dark:bg-white/[0.02]',
               'border-stone-200 dark:border-white/[0.07]'
             )}>
-              {[
-                { name:'Sophie Müller',   amount:'€1,200.00', time:'2h ago',    color:'from-sky-500 to-blue-600',      initials:'SM', sub:'Deutsche Bank · Germany'     },
-                { name:'Amina Bello',     amount:'£850.00',   time:'Yesterday', color:'from-violet-500 to-purple-600', initials:'AB', sub:'Barclays · United Kingdom'    },
-                { name:'TechCorp Ltd.',   amount:'$4,500',    time:'5d ago',    color:'from-slate-500 to-slate-700',   initials:'TC', sub:'JP Morgan · United States'    },
-                { name:'Fatima Al-Rashid',amount:'$1,080',    time:'2w ago',    color:'from-amber-500 to-orange-600',  initials:'FA', sub:'Emirates NBD · UAE'           },
-              ].map((tx, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3
-                  border-b border-stone-100 dark:border-white/[0.04] last:border-0">
-                  <div className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-                    'text-white text-[10px] font-bold',
-                    `bg-gradient-to-br ${tx.color}`
-                  )}>
-                    {tx.initials}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12.5px] font-semibold text-stone-800 dark:text-white/80 leading-none truncate">
-                      {tx.name}
-                    </p>
-                    <p className="text-[10px] mt-0.5 text-stone-400 dark:text-white/25 truncate">
-                      {tx.sub}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[12px] font-mono font-medium text-stone-600 dark:text-white/55 block">
-                      {tx.amount}
-                    </span>
-                    <span className="text-[10px] font-mono text-stone-300 dark:text-white/20">
-                      {tx.time}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {(() => {
+                const recentTx = transactions.filter(t => t.type === 'transfer_out' || t.type === 'withdrawal');
+                if (recentTx.length === 0) return (
+                  <p className="px-4 py-6 text-center text-[12px] text-stone-400 dark:text-white/25 font-mono">
+                    No transfers yet
+                  </p>
+                );
+                return recentTx.map((tx: Transaction) => {
+                  const name = tx.recipient_name ?? tx.description ?? 'Transfer';
+                  const initials = name.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+                  const sym = CURRENCY_SYMBOLS[tx.from_currency ?? 'USD'] ?? '$';
+                  return (
+                    <div key={tx.id} className="flex items-center gap-3 px-4 py-3
+                      border-b border-stone-100 dark:border-white/[0.04] last:border-0">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0
+                        bg-gradient-to-br from-stone-500 to-stone-700 text-white text-[10px] font-bold">
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12.5px] font-semibold text-stone-800 dark:text-white/80 leading-none truncate">
+                          {name}
+                        </p>
+                        <p className="text-[10px] mt-0.5 text-stone-400 dark:text-white/25 truncate">
+                          {tx.recipient_account ?? tx.reference}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[12px] font-mono font-medium text-stone-600 dark:text-white/55 block">
+                          -{sym}{(tx.from_amount ?? 0).toLocaleString('en', { minimumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-[10px] font-mono text-stone-300 dark:text-white/20">
+                          {timeAgo(tx.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 

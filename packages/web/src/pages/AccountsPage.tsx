@@ -112,17 +112,9 @@ const AccountCard = ({
           )
     )}>
 
-      {/* Primary badge */}
-      {primary && (
-        <span className="absolute top-3.5 right-12 text-[9px] font-bold tracking-[0.15em] uppercase
-          text-[#C9A84C] bg-[#C9A84C]/12 px-2 py-0.5 rounded-full border border-[#C9A84C]/20">
-          Primary
-        </span>
-      )}
-
       {/* Header row */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <img
             src={getFlag(currency)}
             alt={currency}
@@ -139,6 +131,12 @@ const AccountCard = ({
             </p>
           </div>
         </div>
+        {primary && (
+          <span className="text-[9px] font-bold tracking-[0.15em] uppercase shrink-0 mx-2
+            text-[#C9A84C] bg-[#C9A84C]/10 px-2 py-0.5 rounded-full border border-[#C9A84C]/20">
+            Primary
+          </span>
+        )}
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); setHidden((h) => !h); }}

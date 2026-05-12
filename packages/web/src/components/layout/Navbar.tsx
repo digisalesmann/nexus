@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { useWallets } from '../../hooks/useWallets';
 import { supabase } from '../../lib/supabase';
+import { CURRENCY_SYMBOLS } from '../../lib/utils';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -79,7 +81,7 @@ const navGroups = [
   {
     label: 'Main',
     items: [
-      { icon: Home,       label: 'Overview',      href: '/'             },
+      { icon: Home,       label: 'Overview',      href: '/dashboard'    },
       { icon: Landmark,   label: 'Accounts',      href: '/accounts'     },
       { icon: Repeat,     label: 'Convert',       href: '/swap'         },
       { icon: History,    label: 'History',       href: '/transactions' },
@@ -355,10 +357,17 @@ const MobileDrawer = ({
   setLanguage: (c: LanguageCode) => void;
 }) => {
   const location = useLocation();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, user } = useAuth();
+  const { wallets } = useWallets();
   const navigate = useNavigate();
-  const displayName = profile?.full_name ?? 'Account';
+  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Account';
   const initial = displayName[0]?.toUpperCase() ?? '?';
+
+  // Compute total balance from primary wallet (or first wallet)
+  const primaryWallet = wallets.find(w => w.is_primary) ?? wallets[0];
+  const balanceDisplay = primaryWallet
+    ? `${CURRENCY_SYMBOLS[primaryWallet.currency] ?? '$'}${primaryWallet.balance.toLocaleString('en', { minimumFractionDigits: 2 })}`
+    : '—';
 
   const handleSignOut = async () => {
     onClose();
@@ -451,11 +460,11 @@ const MobileDrawer = ({
                     <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/60" />
                   </div>
                   <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-white/50 mb-0.5">
-                    Total balance
+                    {primaryWallet ? `${primaryWallet.currency} balance` : 'Balance'}
                   </p>
                   <p className="text-[22px] font-light text-white leading-none tracking-[-1px]"
                     style={{ fontFamily: "'DM Serif Display', Georgia, serif" }}>
-                    $24,500<span className="text-[14px] text-white/40">.00</span>
+                    {balanceDisplay}
                   </p>
                 </div>
               </div>
@@ -545,48 +554,13 @@ const MobileDrawer = ({
                   <ThemeToggle />
                 </div>
 
-                {/* Language selector */}
-                <div className={cn(
-                  'px-3 py-3 rounded-xl',
-                  'bg-stone-50 dark:bg-white/[0.03]'
-                )}>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.15em] mb-2.5
-                    text-stone-400 dark:text-white/25">
-                    Language
-                  </p>
-                  <div className="flex gap-2">
-                    {langOptions.map(opt => {
-                      const FlagIcon = FLAG_COMPONENTS[opt.code];
-                      return (
-                        <button
-                          key={opt.code}
-                          onClick={() => setLanguage(opt.code)}
-                          className={cn(
-                            'flex-1 flex flex-col items-center gap-1.5 py-2.5 rounded-xl border transition-all',
-                            language === opt.code
-                              ? 'bg-[#C9A84C]/10 border-[#C9A84C]/30'
-                              : 'bg-white dark:bg-white/[0.03] border-stone-200 dark:border-white/[0.07]'
-                          )}
-                        >
-                          <FlagIcon />
-                          <span className={cn(
-                            'text-[10px] font-bold uppercase tracking-wide',
-                            language === opt.code
-                              ? 'text-[#C9A84C]'
-                              : 'text-stone-400 dark:text-white/25'
-                          )}>
-                            {opt.code}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
               {/* ── ACCOUNT ACTIONS — inside scroll area so nothing clips ── */}
-              <div className="mt-2 pt-3 border-t border-stone-100 dark:border-white/[0.06] space-y-1 pb-8">
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors
+              <div className="mt-2 pt-3 border-t border-stone-100 dark:border-white/[0.06] space-y-1 pb-[max(2rem,env(safe-area-inset-bottom,2rem))]" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 2rem))' }}>
+                <button
+                  onClick={() => { navigate('/settings'); onClose(); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors
                   text-stone-500 dark:text-white/35
                   hover:bg-stone-100 dark:hover:bg-white/[0.04]
                   hover:text-stone-800 dark:hover:text-white/65">
@@ -652,9 +626,11 @@ const HamburgerIcon = ({ open }: { open: boolean }) => (
 export const Navbar = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { language, setLanguage }   = useLanguage();
-  const { profile }                 = useAuth();
-  const navFirstName = profile?.full_name?.split(' ')[0] ?? 'You';
-  const navInitial   = navFirstName[0]?.toUpperCase() ?? '?';
+  const { profile, user }           = useAuth();
+  const navFirstName = profile?.full_name?.split(' ')[0]
+    ?? user?.email?.split('@')[0]
+    ?? 'You';
+  const navInitial = navFirstName[0]?.toUpperCase() ?? '?';
 
   const getGreeting = () => {
     const h = new Date().getHours();

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Building2,
   CreditCard,
@@ -15,7 +15,10 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getFlag } from '../lib/utils';
+import { getFlag, CURRENCY_SYMBOLS } from '../lib/utils';
+import { useWallets } from '../hooks/useWallets';
+import { useAuth } from '../context/AuthContext';
+import type { Wallet } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -30,12 +33,23 @@ interface Account {
   accountNum: string;
 }
 
-const ACCOUNTS: Account[] = [
-  { code: 'USD', name: 'US Dollar',      symbol: '$',  balance: 14250.60, balanceFmt: '$14,250.60', accountNum: '4521 8830 1192 0047' },
-  { code: 'NGN', name: 'Nigerian Naira', symbol: '₦', balance: 850000,   balanceFmt: '₦850,000',   accountNum: '0123 4567 8901'       },
-  { code: 'GBP', name: 'British Pound',  symbol: '£',  balance: 2100.00,  balanceFmt: '£2,100.00',  accountNum: '3309 5512 8820 1134'  },
-  { code: 'EUR', name: 'Euro',           symbol: '€',  balance: 0,        balanceFmt: '€0.00',       accountNum: '7712 0044 3391 6680'  },
-];
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'US Dollar', GBP: 'British Pound', EUR: 'Euro',
+  NGN: 'Nigerian Naira', CAD: 'Canadian Dollar', AUD: 'Australian Dollar',
+  CHF: 'Swiss Franc', JPY: 'Japanese Yen',
+};
+
+function adaptWallet(w: Wallet): Account {
+  const sym = CURRENCY_SYMBOLS[w.currency] ?? w.currency;
+  return {
+    code:       w.currency,
+    name:       CURRENCY_NAMES[w.currency] ?? w.currency,
+    symbol:     sym,
+    balance:    w.balance,
+    balanceFmt: `${sym}${w.balance.toLocaleString('en', { minimumFractionDigits: 2 })}`,
+    accountNum: w.account_number,
+  };
+}
 
 type MethodId = 'bank' | 'card' | 'ussd' | 'wire';
 
@@ -100,15 +114,6 @@ const METHODS: FundingMethod[] = [
 
 const QUICK_AMOUNTS = [1000, 5000, 10000, 25000, 50000];
 
-const BANK_DETAILS = {
-  bankName:    'Stonegate Settlement Bank',
-  accountName: 'Alex Morgan',
-  accountNum:  '0123456789',
-  sortCode:    '04-00-04',
-  iban:        'GB29NWBK60161331926819',
-  swift:       'NXUSgb2L',
-  reference:   'STG-TOP-4721',
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED SECTION RULE
@@ -129,10 +134,11 @@ const SectionRule = ({ label }: { label: string }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AccountSelector = ({
-  selected, onSelect,
+  selected, onSelect, accounts,
 }: {
   selected: Account;
   onSelect: (a: Account) => void;
+  accounts: Account[];
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -187,7 +193,7 @@ const AccountSelector = ({
             'shadow-2xl shadow-black/15 dark:shadow-black/50'
           )}
             style={{ maxHeight: 260, overflowY: 'auto', scrollbarWidth: 'none' }}>
-            {ACCOUNTS.map(a => (
+            {accounts.map(a => (
               <button
                 key={a.code}
                 onClick={() => { onSelect(a); setOpen(false); }}
@@ -518,13 +524,13 @@ const WirePanel = () => (
       </p>
     </div>
     <div className="px-5 py-1">
-      <CopyRow label="Bank name"    value={BANK_DETAILS.bankName}    />
-      <CopyRow label="Account name" value={BANK_DETAILS.accountName} />
-      <CopyRow label="Account no."  value={BANK_DETAILS.accountNum}  />
-      <CopyRow label="Sort code"    value={BANK_DETAILS.sortCode}    />
-      <CopyRow label="IBAN"         value={BANK_DETAILS.iban}        />
-      <CopyRow label="SWIFT / BIC"  value={BANK_DETAILS.swift}       />
-      <CopyRow label="Reference"    value={BANK_DETAILS.reference}   />
+      <CopyRow label="Bank name"    value={bankDetails.bankName}    />
+      <CopyRow label="Account name" value={bankDetails.accountName} />
+      <CopyRow label="Account no."  value={bankDetails.accountNum}  />
+      <CopyRow label="Sort code"    value={bankDetails.sortCode}    />
+      <CopyRow label="IBAN"         value={bankDetails.iban}        />
+      <CopyRow label="SWIFT / BIC"  value={bankDetails.swift}       />
+      <CopyRow label="Reference"    value={bankDetails.reference}   />
     </div>
     <div className="px-5 py-3.5 border-t border-stone-100 dark:border-white/[0.06]
       bg-stone-50 dark:bg-white/[0.01]">
@@ -621,13 +627,40 @@ const SuccessScreen = ({
 type Step = 'form' | 'success';
 
 const AddMoneyPage = () => {
+  const { profile, user }         = useAuth();
+  const { wallets }               = useWallets();
+
+  const accounts = useMemo(() => wallets.map(adaptWallet), [wallets]);
+
+  const bankDetails = useMemo(() => {
+    const primary = wallets.find(w => w.is_primary) ?? wallets[0];
+    const ref = `STG-TOP-${(user?.id ?? '').slice(-4).toUpperCase() || '0000'}`;
+    return {
+      bankName:    'Stonegate Settlement Bank',
+      accountName: profile?.full_name ?? user?.email?.split('@')[0] ?? 'Account Holder',
+      accountNum:  primary?.account_number ?? '—',
+      sortCode:    primary?.sort_code ?? '—',
+      iban:        primary?.iban ?? '—',
+      swift:       'NXUSgb2L',
+      reference:   ref,
+    };
+  }, [wallets, profile, user]);
+
   const [step,      setStep]      = useState<Step>('form');
-  const [account,   setAccount]   = useState<Account>(ACCOUNTS[0]);
+  const [account,   setAccount]   = useState<Account | null>(null);
   const [method,    setMethod]    = useState<FundingMethod>(METHODS[0]);
   const [amount,    setAmount]    = useState('');
 
+  // Sync account state when wallets load
+  useEffect(() => {
+    if (accounts.length > 0 && !account) setAccount(accounts[0]);
+  }, [accounts]);
+
+  const currentAccount = account ?? accounts[0] ?? null;
+  if (!currentAccount) return null;
+
   const num    = parseFloat(amount) || 0;
-  const sym    = account.symbol;
+  const sym    = currentAccount.symbol;
   const fee    = method.id === 'card' ? num * 0.015 : 0;
   const youGet = num - fee;
 
@@ -644,7 +677,7 @@ const AddMoneyPage = () => {
       <div className="w-full max-w-[520px] mx-auto">
         <SuccessScreen
           amount={num} symbol={sym}
-          account={account} method={method}
+          account={currentAccount} method={method}
           onReset={handleReset}
         />
         <div className="h-24 lg:h-12" />
@@ -680,7 +713,7 @@ const AddMoneyPage = () => {
             'bg-white dark:bg-white/[0.02]',
             'border-stone-200 dark:border-white/[0.07]'
           )}>
-            <AccountSelector selected={account} onSelect={setAccount} />
+            <AccountSelector selected={currentAccount} onSelect={setAccount} accounts={accounts} />
           </div>
 
           {/* Method cards */}
@@ -729,11 +762,11 @@ const AddMoneyPage = () => {
                     </div>
                     {/* Details */}
                     <div className="flex-1 px-4 sm:px-5 py-1 sm:py-2">
-                      <CopyRow label="Bank name"    value={BANK_DETAILS.bankName}    />
-                      <CopyRow label="Account name" value={BANK_DETAILS.accountName} />
-                      <CopyRow label="Account no."  value={BANK_DETAILS.accountNum}  />
-                      <CopyRow label="Sort code"    value={BANK_DETAILS.sortCode}    />
-                      <CopyRow label="Reference"    value={BANK_DETAILS.reference}   />
+                      <CopyRow label="Bank name"    value={bankDetails.bankName}    />
+                      <CopyRow label="Account name" value={bankDetails.accountName} />
+                      <CopyRow label="Account no."  value={bankDetails.accountNum}  />
+                      <CopyRow label="Sort code"    value={bankDetails.sortCode}    />
+                      <CopyRow label="Reference"    value={bankDetails.reference}   />
                     </div>
                   </div>
                 </div>
@@ -759,7 +792,7 @@ const AddMoneyPage = () => {
 
             {/* USSD */}
             {method.id === 'ussd' && (
-              <USSDPanel amount={num} account={account} />
+              <USSDPanel amount={num} account={currentAccount} />
             )}
 
             {/* Wire */}
@@ -821,7 +854,7 @@ const AddMoneyPage = () => {
                 )}
               </div>
               <p className="text-[10px] font-mono text-stone-300 dark:text-white/20 px-1">
-                Current balance: {account.balanceFmt}
+                Current balance: {currentAccount.balanceFmt}
               </p>
             </div>
 

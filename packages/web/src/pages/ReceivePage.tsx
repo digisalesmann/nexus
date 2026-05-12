@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Copy,
   CheckCircle2,
@@ -14,7 +14,11 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getFlag } from '../lib/utils';
+import { getFlag, CURRENCY_SYMBOLS } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { useWallets } from '../hooks/useWallets';
+import { useTransactions } from '../hooks/useTransactions';
+import type { Wallet, Transaction } from '../lib/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
@@ -35,82 +39,48 @@ interface Account {
   accountHolder: string;
 }
 
-const ACCOUNTS: Account[] = [
-  {
-    code:          'USD',
-    name:          'US Dollar',
-    symbol:        '$',
-    balance:       14250.60,
-    balanceFmt:    '$14,250.60',
-    accountNum:    '4521883011920047',
-    iban:          'US29NXUS00014521883011920047',
-    swift:         'NXUSGB2L',
-    sortCode:      '04-00-04',
-    routing:       '021000021',
-    bankName:      'Stonegate Bank',
-    accountHolder: 'Alex Morgan',
-  },
-  {
-    code:          'GBP',
-    name:          'British Pound',
-    symbol:        '£',
-    balance:       2100.00,
-    balanceFmt:    '£2,100.00',
-    accountNum:    '33095512882011 34',
-    iban:          'GB29NWBK60161331926819',
-    swift:         'NXUSGB2L',
-    sortCode:      '04-00-04',
-    routing:       '',
-    bankName:      'Stonegate Bank',
-    accountHolder: 'Alex Morgan',
-  },
-  {
-    code:          'EUR',
-    name:          'Euro',
-    symbol:        '€',
-    balance:       3800.00,
-    balanceFmt:    '€3,800.00',
-    accountNum:    '77120044339166 80',
-    iban:          'DE89370400440532013000',
-    swift:         'NXUSGB2L',
-    sortCode:      '',
-    routing:       '',
-    bankName:      'Stonegate Bank',
-    accountHolder: 'Alex Morgan',
-  },
-  {
-    code:          'CAD',
-    name:          'Canadian Dollar',
-    symbol:        'CA$',
-    balance:       5220.75,
-    balanceFmt:    'CA$5,220.75',
-    accountNum:    '00198844217711 92',
-    iban:          '',
-    swift:         'NXUSGB2L',
-    sortCode:      '',
-    routing:       '',
-    bankName:      'Stonegate Bank',
-    accountHolder: 'Alex Morgan',
-  },
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'US Dollar', GBP: 'British Pound', EUR: 'Euro',
+  NGN: 'Nigerian Naira', CAD: 'Canadian Dollar', AUD: 'Australian Dollar',
+  CHF: 'Swiss Franc', JPY: 'Japanese Yen',
+};
+
+const AVATAR_COLORS = [
+  'from-emerald-500 to-teal-600',
+  'from-sky-500 to-blue-600',
+  'from-slate-500 to-slate-700',
+  'from-violet-500 to-purple-600',
+  'from-amber-500 to-orange-600',
+  'from-rose-500 to-pink-600',
 ];
 
-interface IncomingTx {
-  id:       string;
-  name:     string;
-  initials: string;
-  color:    string;
-  amount:   string;
-  currency: string;
-  time:     string;
-  method:   string;
+function adaptWallet(w: Wallet, accountHolder: string): Account {
+  const sym = CURRENCY_SYMBOLS[w.currency] ?? w.currency;
+  const bal = w.balance.toLocaleString('en', { minimumFractionDigits: 2 });
+  return {
+    code:          w.currency,
+    name:          CURRENCY_NAMES[w.currency] ?? w.currency,
+    symbol:        sym,
+    balance:       w.balance,
+    balanceFmt:    `${sym}${bal}`,
+    accountNum:    w.account_number ?? '—',
+    iban:          w.iban ?? '',
+    swift:         'NXUSgb2L',
+    sortCode:      w.sort_code ?? '',
+    routing:       w.currency === 'USD' ? '021000021' : '',
+    bankName:      'Stonegate Settlement Bank',
+    accountHolder,
+  };
 }
 
-const RECENT_INCOMING: IncomingTx[] = [
-  { id:'i01', name:'Marcus Chen',    initials:'MC', color:'from-emerald-500 to-teal-600',  amount:'+$2,500.00', currency:'USD', time:'2h ago',    method:'Stonegate wallet'  },
-  { id:'i02', name:'Sophie Müller',  initials:'SM', color:'from-sky-500 to-blue-600',      amount:'+€380.00',   currency:'EUR', time:'Yesterday', method:'SEPA transfer' },
-  { id:'i03', name:'TechCorp Ltd.',  initials:'TC', color:'from-slate-500 to-slate-700',   amount:'+$4,500.00', currency:'USD', time:'5d ago',    method:'Wire transfer'  },
-  { id:'i04', name:'Amina Bello',    initials:'AB', color:'from-violet-500 to-purple-600', amount:'+£250.00',   currency:'GBP', time:'1w ago',    method:'Bank transfer'  },
-];
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1)    return 'Just now';
+  if (mins < 60)   return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 10080) return `${Math.round(mins / 1440)}d ago`;
+  return `${Math.round(mins / 10080)}w ago`;
+}
 
 type MethodTab = 'local' | 'wire' | 'nexus';
 
@@ -242,9 +212,9 @@ const QRCode = ({ size = 160 }: { size?: number }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AccountSelector = ({
-  selected, onSelect,
+  selected, onSelect, accounts,
 }: {
-  selected: Account; onSelect: (a: Account) => void;
+  selected: Account; onSelect: (a: Account) => void; accounts: Account[];
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -306,7 +276,7 @@ const AccountSelector = ({
             'border-stone-200 dark:border-white/[0.09]',
             'shadow-2xl shadow-black/15 dark:shadow-black/50'
           )}>
-            {ACCOUNTS.map(a => (
+            {accounts.map(a => (
               <button
                 key={a.code}
                 onClick={() => { onSelect(a); setOpen(false); }}
@@ -467,7 +437,9 @@ const HeroCard = ({ account }: { account: Account }) => {
 // METHOD TAB PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MethodTabs = ({ account }: { account: Account }) => {
+const MethodTabs = ({ account, stonegateid, email, displayName, reference }: {
+  account: Account; stonegateid: string; email: string; displayName: string; reference: string;
+}) => {
   const [active, setActive] = useState<MethodTab>('local');
 
   const tabs: { id: MethodTab; icon: React.ElementType; label: string }[] = [
@@ -528,9 +500,6 @@ const MethodTabs = ({ account }: { account: Account }) => {
             {account.routing && (
               <CopyRow label="Routing number (ACH)" value={account.routing} />
             )}
-            {account.sortCode && (
-              <CopyRow label="Sort code" value={account.sortCode} />
-            )}
           </div>
         )}
 
@@ -556,7 +525,7 @@ const MethodTabs = ({ account }: { account: Account }) => {
               <CopyRow label="Account number" value={account.accountNum} accent large />
             )}
             <CopyRow label="SWIFT / BIC"    value={account.swift}                 />
-            <CopyRow label="Reference"      value={`STG-${account.code}-4721`}    />
+            <CopyRow label="Reference"      value={reference}                     />
             <CopyRow label="Bank address"   value="25 Finsbury Square, London, EC2A 1AN" />
           </div>
         )}
@@ -573,9 +542,9 @@ const MethodTabs = ({ account }: { account: Account }) => {
               </p>
             </div>
 
-            <CopyRow label="Stonegate ID"    value="STG-4721-OKAFOR" accent large />
-            <CopyRow label="Email"       value="victor@stonegate.bank"           />
-            <CopyRow label="Display name" value="Alex Morgan"                   />
+            <CopyRow label="Stonegate ID"  value={stonegateid} accent large />
+            <CopyRow label="Email"        value={email}                />
+            <CopyRow label="Display name" value={displayName}          />
           </div>
         )}
       </div>
@@ -673,7 +642,7 @@ const QRPanel = ({ account }: { account: Account }) => {
 // RECENT INCOMING
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RecentIncoming = () => (
+const RecentIncoming = ({ txs }: { txs: Transaction[] }) => (
   <div className={cn(
     'rounded-2xl border overflow-hidden',
     'bg-white dark:bg-white/[0.02]',
@@ -685,48 +654,58 @@ const RecentIncoming = () => (
         text-stone-400 dark:text-white/25">
         Recent received
       </p>
-      <button className="text-[10px] font-bold text-[#C9A84C]/70 hover:text-[#C9A84C] transition-colors">
-        View all
-      </button>
     </div>
     <div className="px-3 sm:px-4 py-1">
-      {RECENT_INCOMING.map(tx => (
-        <div key={tx.id}
-          className="flex items-center gap-3 py-3.5
-            border-b border-stone-100 dark:border-white/[0.04] last:border-0
-            hover:bg-stone-50 dark:hover:bg-white/[0.02]
-            -mx-2 px-2 rounded-xl transition-colors group cursor-default">
-          <div className={cn(
-            'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
-            'text-white text-[11px] font-bold',
-            `bg-gradient-to-br ${tx.color}`
-          )}>
-            {tx.initials}
+      {txs.length === 0 ? (
+        <p className="py-6 text-center text-[12px] text-stone-400 dark:text-white/25 font-mono">
+          No incoming payments yet
+        </p>
+      ) : txs.map((tx, idx) => {
+        const name = tx.recipient_name ?? (tx.type === 'deposit' ? 'Bank deposit' : 'Transfer');
+        const initials = name.split(' ').filter(Boolean).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+        const color = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+        const currency = tx.to_currency ?? tx.from_currency ?? 'USD';
+        const sym = CURRENCY_SYMBOLS[currency] ?? '';
+        const amt = (tx.to_amount ?? tx.from_amount ?? 0).toLocaleString('en', { minimumFractionDigits: 2 });
+        const method = tx.type === 'transfer_in' ? 'Stonegate wallet' : 'Bank deposit';
+        return (
+          <div key={tx.id}
+            className="flex items-center gap-3 py-3.5
+              border-b border-stone-100 dark:border-white/[0.04] last:border-0
+              hover:bg-stone-50 dark:hover:bg-white/[0.02]
+              -mx-2 px-2 rounded-xl transition-colors group cursor-default">
+            <div className={cn(
+              'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
+              'text-white text-[11px] font-bold',
+              `bg-gradient-to-br ${color}`
+            )}>
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold leading-none text-stone-800 dark:text-white/80 truncate">
+                {name}
+              </p>
+              <p className="text-[10px] mt-0.5 text-stone-400 dark:text-white/25 truncate">
+                {method} · {timeAgo(tx.created_at)}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[13px] font-bold font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">
+                +{sym}{amt}
+              </p>
+              <img
+                src={getFlag(currency)}
+                alt={currency}
+                className="w-4 h-4 rounded-full object-cover border border-stone-200 dark:border-white/[0.08]
+                  ml-auto mt-0.5"
+              />
+            </div>
+            <ChevronRight size={12}
+              className="text-stone-200 dark:text-white/15 shrink-0
+                group-hover:text-stone-400 dark:group-hover:text-white/30 transition-colors hidden sm:block" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold leading-none text-stone-800 dark:text-white/80 truncate">
-              {tx.name}
-            </p>
-            <p className="text-[10px] mt-0.5 text-stone-400 dark:text-white/25 truncate">
-              {tx.method} · {tx.time}
-            </p>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-[13px] font-bold font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">
-              {tx.amount}
-            </p>
-            <img
-              src={getFlag(tx.currency)}
-              alt={tx.currency}
-              className="w-4 h-4 rounded-full object-cover border border-stone-200 dark:border-white/[0.08]
-                ml-auto mt-0.5"
-            />
-          </div>
-          <ChevronRight size={12}
-            className="text-stone-200 dark:text-white/15 shrink-0
-              group-hover:text-stone-400 dark:group-hover:text-white/30 transition-colors hidden sm:block" />
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>
 );
@@ -735,11 +714,17 @@ const RecentIncoming = () => (
 // STATS STRIP
 // ─────────────────────────────────────────────────────────────────────────────
 
-const StatsStrip = ({ account }: { account: Account }) => {
+const StatsStrip = ({ account, todayAmt, monthAmt }: {
+  account: Account; todayAmt: number; monthAmt: number;
+}) => {
+  const fmt = (n: number) => {
+    if (n >= 1000) return `${account.symbol}${(n / 1000).toFixed(1)}k`;
+    return `${account.symbol}${n.toFixed(0)}`;
+  };
   const stats = [
-    { label: 'Received today',  value: `${account.symbol}2,500`,  up: true  },
-    { label: 'This month',      value: `${account.symbol}14.2k`,  up: true  },
-    { label: 'Pending inbound', value: `${account.symbol}0`,      up: false },
+    { label: 'Received today',  value: fmt(todayAmt), up: todayAmt > 0  },
+    { label: 'This month',      value: fmt(monthAmt), up: monthAmt > 0  },
+    { label: 'Pending inbound', value: `${account.symbol}0`,  up: false },
   ];
 
   return (
@@ -775,7 +760,47 @@ const StatsStrip = ({ account }: { account: Account }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ReceivePage = () => {
-  const [account, setAccount] = useState<Account>(ACCOUNTS[0]);
+  const { user, profile } = useAuth();
+  const { wallets } = useWallets();
+  const { transactions } = useTransactions(50);
+
+  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Account Holder';
+  const stonegateid = `STG-${(user?.id ?? '').slice(0, 4).toUpperCase()}-${(user?.id ?? '').slice(4, 8).toUpperCase()}`;
+  const email       = user?.email ?? '—';
+
+  const accounts = useMemo(() => wallets.map(w => adaptWallet(w, displayName)), [wallets, displayName]);
+
+  const [account, setAccount] = useState<Account | null>(null);
+  useEffect(() => {
+    if (accounts.length > 0 && !account) setAccount(accounts[0]);
+  }, [accounts]);
+  const currentAccount = account ?? accounts[0] ?? null;
+
+  const incomingTxs = useMemo(
+    () => transactions.filter(tx => tx.type === 'transfer_in' || tx.type === 'deposit'),
+    [transactions]
+  );
+
+  const todayAmt = useMemo(() => {
+    const today = new Date().toDateString();
+    return incomingTxs
+      .filter(tx => new Date(tx.created_at).toDateString() === today)
+      .reduce((s, tx) => s + (tx.to_amount ?? tx.from_amount ?? 0), 0);
+  }, [incomingTxs]);
+
+  const monthAmt = useMemo(() => {
+    const now = new Date();
+    return incomingTxs
+      .filter(tx => {
+        const d = new Date(tx.created_at);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((s, tx) => s + (tx.to_amount ?? tx.from_amount ?? 0), 0);
+  }, [incomingTxs]);
+
+  if (!currentAccount) return null;
+
+  const reference = `STG-${currentAccount.code}-${(user?.id ?? '').slice(-4).toUpperCase() || '0000'}`;
 
   return (
     <div className="w-full">
@@ -794,12 +819,12 @@ const ReceivePage = () => {
 
       {/* Account selector */}
       <div className="mb-5">
-        <AccountSelector selected={account} onSelect={setAccount} />
+        <AccountSelector selected={currentAccount} onSelect={setAccount} accounts={accounts} />
       </div>
 
       {/* Stats strip */}
       <div className="mb-6">
-        <StatsStrip account={account} />
+        <StatsStrip account={currentAccount} todayAmt={todayAmt} monthAmt={monthAmt} />
       </div>
 
       {/* Two-column desktop layout */}
@@ -810,11 +835,17 @@ const ReceivePage = () => {
         <div className="space-y-4">
 
           {/* Hero account card */}
-          <HeroCard account={account} />
+          <HeroCard account={currentAccount} />
 
           {/* Method tabs */}
           <SectionRule label="Banking details" />
-          <MethodTabs account={account} />
+          <MethodTabs
+            account={currentAccount}
+            stonegateid={stonegateid}
+            email={email}
+            displayName={displayName}
+            reference={reference}
+          />
 
           {/* Important note */}
           <div className={cn(
@@ -828,7 +859,7 @@ const ReceivePage = () => {
                 Reference number matters
               </p>
               <p className="text-[11px] text-amber-600/80 dark:text-amber-400/70">
-                Always ask the sender to include your reference <span className="font-mono font-bold">STG-{account.code}-4721</span> to ensure funds are credited to the correct account without delay.
+                Always ask the sender to include your reference <span className="font-mono font-bold">{reference}</span> to ensure funds are credited to the correct account without delay.
               </p>
             </div>
           </div>
@@ -840,11 +871,11 @@ const ReceivePage = () => {
 
           {/* QR code panel */}
           <SectionRule label="QR code" />
-          <QRPanel account={account} />
+          <QRPanel account={currentAccount} />
 
           {/* Recent incoming */}
           <SectionRule label="Recent received" />
-          <RecentIncoming />
+          <RecentIncoming txs={incomingTxs} />
 
           {/* How to receive callout */}
           <div className={cn(
