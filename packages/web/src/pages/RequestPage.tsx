@@ -672,7 +672,6 @@ const RequestPage = () => {
     supabase.from('payment_requests').select('*').eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
-        const sym = CURRENCY_SYMBOLS['USD'] ?? '$';
         setRequests(((data ?? []) as DBPaymentRequest[]).map(r => adaptDBRequest(r, CURRENCY_SYMBOLS[r.currency] ?? r.currency)));
       });
   }, [user?.id]);
@@ -700,7 +699,7 @@ const RequestPage = () => {
     .reduce((s, r) => s + parseFloat(r.amount.replace(/[^0-9.]/g, '')), 0);
 
   const handleCancelRequest = async (id: string) => {
-    await supabase.from('payment_requests').update({ status: 'cancelled' }).eq('id', id);
+    await (supabase.from('payment_requests') as any).update({ status: 'cancelled' }).eq('id', id);
     setRequests(prev => prev.map(r =>
       r.id === id ? { ...r, status: 'cancelled' as RequestStatus } : r
     ));
@@ -708,7 +707,7 @@ const RequestPage = () => {
 
   const handleCreate = async () => {
     if (!user || !currentAccount) return;
-    const { data } = await supabase.from('payment_requests').insert({
+    const { data } = await (supabase.from('payment_requests') as any).insert({
       user_id:      user.id,
       contact_name: contact?.name ?? null,
       amount:       num > 0 ? num : null,

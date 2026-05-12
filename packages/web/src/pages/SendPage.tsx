@@ -1010,7 +1010,8 @@ const SendPage = () => {
     const fee = amount * FEE_PCT;
     setSubmitting(true);
     setSubmitError(null);
-    const { data, error } = await supabase.rpc('perform_transfer', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('perform_transfer', {
       p_user_id:           user.id,
       p_currency:          account.code,
       p_amount:            amount,
@@ -1018,7 +1019,7 @@ const SendPage = () => {
       p_recipient_name:    recipient.name,
       p_recipient_account: recipient.accountNum,
       p_description:       note || null,
-    });
+    }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null };
     setSubmitting(false);
     if (error || !data?.success) {
       setSubmitError(data?.error ?? error?.message ?? 'Transfer failed. Please try again.');

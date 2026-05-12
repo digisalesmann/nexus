@@ -508,7 +508,8 @@ const USSDPanel = ({ amount, account }: {
 // WIRE INSTRUCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const WirePanel = () => (
+interface BankDetails { bankName: string; accountName: string; accountNum: string; sortCode: string; iban: string; swift: string; reference: string; }
+const WirePanel = ({ bankDetails }: { bankDetails: BankDetails }) => (
   <div className={cn(
     'rounded-2xl border overflow-hidden',
     'bg-white dark:bg-white/[0.02]',
@@ -797,7 +798,7 @@ const AddMoneyPage = () => {
 
             {/* Wire */}
             {method.id === 'wire' && (
-              <WirePanel />
+              <WirePanel bankDetails={bankDetails} />
             )}
           </div>
 

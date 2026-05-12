@@ -13,9 +13,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   ShoppingCart,
-  Coffee,
   Plane,
-  Wifi,
   Shield,
   Bell,
   Sliders,
@@ -1034,7 +1032,7 @@ const CardsPage = () => {
     const card = cards.find(c => c.id === activeId);
     if (!card) return;
     const newStatus = card.status === 'frozen' ? 'active' : 'frozen';
-    await supabase.from('cards').update({ status: newStatus }).eq('id', activeId);
+    await (supabase.from('cards') as any).update({ status: newStatus }).eq('id', activeId);
     setCards(prev => prev.map(c => c.id === activeId ? { ...c, status: newStatus } : c));
   };
 

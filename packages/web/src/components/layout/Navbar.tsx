@@ -160,7 +160,7 @@ const NotifDropdown = () => {
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id);
+    await (supabase.from('notifications') as any).update({ read: true }).eq('user_id', user.id);
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   };
 
@@ -349,12 +349,10 @@ const LangDropdown = ({ language, setLanguage }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MobileDrawer = ({
-  open, onClose, language, setLanguage,
+  open, onClose,
 }: {
   open: boolean;
   onClose: () => void;
-  language: string;
-  setLanguage: (c: LanguageCode) => void;
 }) => {
   const location = useLocation();
   const { profile, signOut, user } = useAuth();
@@ -725,8 +723,6 @@ export const Navbar = () => {
       <MobileDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        language={language}
-        setLanguage={setLanguage}
       />
     </>
   );

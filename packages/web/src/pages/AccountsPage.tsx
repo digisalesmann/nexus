@@ -11,7 +11,6 @@ import {
   EyeOff,
   Copy,
   CheckCircle2,
-  RefreshCw,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';

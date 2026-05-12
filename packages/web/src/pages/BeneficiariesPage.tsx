@@ -1000,8 +1000,7 @@ const BeneficiariesPage = () => {
 
   const handleAdd = async (data: AddBeneficiaryData) => {
     if (!user) return;
-    const { data: inserted } = await supabase
-      .from('beneficiaries')
+    const { data: inserted } = await (supabase.from('beneficiaries') as any)
       .insert({ user_id: user.id, ...data })
       .select()
       .single();

@@ -454,7 +454,7 @@ type Step = 'form' | 'review' | 'success';
 
 export const SwapPage = () => {
   const { user }                             = useAuth();
-  const { rates, loading: ratesLoading, refresh: refreshRates } = useFxRates();
+  const { rates, loading: ratesLoading } = useFxRates();
   const { wallets, reload: reloadWallets }   = useWallets();
   const { transactions }                     = useTransactions(20);
 
@@ -545,15 +545,16 @@ export const SwapPage = () => {
     if (!user || !hasValid) return;
     setSubmitting(true);
     setSubmitError(null);
-    const { data, error } = await supabase.rpc('perform_swap', {
-      p_user_id:      user.id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('perform_swap', {
+      p_user_id:       user.id,
       p_from_currency: fromCur.code,
       p_to_currency:   toCur.code,
       p_from_amount:   fromNum,
       p_to_amount:     youGet,
       p_rate:          rate,
       p_fee:           fee,
-    });
+    }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null };
     setSubmitting(false);
     if (error || !data?.success) {
       setSubmitError(data?.error ?? error?.message ?? 'Conversion failed. Please try again.');
