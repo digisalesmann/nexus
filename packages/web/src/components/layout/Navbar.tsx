@@ -199,7 +199,12 @@ const NotifDropdown = () => {
             exit={{    opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
             className={cn(
-              'absolute right-0 mt-2 w-[300px] rounded-2xl overflow-hidden z-[120]',
+              /* mobile: fixed full-width below navbar */
+              'fixed sm:absolute',
+              'top-[68px] sm:top-auto',
+              'left-3 right-3 sm:left-auto sm:right-0',
+              'sm:mt-2 sm:w-[300px]',
+              'rounded-2xl overflow-hidden z-[120]',
               'bg-white dark:bg-[#1A1A1C]',
               'border border-stone-150 dark:border-white/[0.07]',
               'shadow-2xl shadow-black/10 dark:shadow-black/50'

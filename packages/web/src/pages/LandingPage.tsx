@@ -84,7 +84,7 @@ const Nav = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <ThemeToggle />
+            <div className="hidden sm:block"><ThemeToggle /></div>
             <Link to="/login"
               className="hidden sm:block px-3.5 py-2 text-[13px] font-semibold rounded-xl
                 text-stone-600 dark:text-white/50
